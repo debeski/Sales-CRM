@@ -1,0 +1,135 @@
+{% extends "dlux/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ DLUX_STRINGS.pr_invoice }} {{ invoice.number }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="h3 mb-1">{{ DLUX_STRINGS.pr_invoice }} {{ invoice.number }}
+                <span class="badge rounded-pill align-middle
+                    {% if invoice.status == 'paid' %}bg-success{% elif invoice.status == 'partial' %}bg-warning text-dark{% elif invoice.status == 'issued' %}bg-info text-dark{% elif invoice.status == 'cancelled' %}bg-danger{% else %}bg-secondary{% endif %}">
+                    {{ invoice.status_label }}
+                </span>
+            </h1>
+            <p class="text-muted mb-0">{{ invoice.invoice_date }} · {{ DLUX_STRINGS.pr_rate }} 1 USD = {{ invoice.exchange_rate }} LYD</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'sales:invoice_print' invoice.pk %}" target="_blank" class="btn btn-outline-secondary rounded-pill">
+                <i class="bi bi-printer me-1"></i>{{ DLUX_STRINGS.ui_print_export }}
+            </a>
+            {% if invoice.is_editable and perms.sales.change_invoice %}
+            <a href="{% url 'sales:invoice_edit' invoice.pk %}" class="btn btn-outline-primary rounded-pill">
+                <i class="bi bi-pencil me-1"></i>{{ DLUX_STRINGS.ui_edit }}
+            </a>
+            {% endif %}
+            {% if invoice.status == 'draft' and perms.sales.issue_invoice %}
+            <form method="post" action="{% url 'sales:invoice_issue' invoice.pk %}">{% csrf_token %}
+                <button class="btn btn-success rounded-pill"><i class="bi bi-check2-circle me-1"></i>{{ DLUX_STRINGS.ui_issue }}</button>
+            </form>
+            {% endif %}
+            {% if invoice.status != 'cancelled' and perms.sales.cancel_invoice %}
+            <form method="post" action="{% url 'sales:invoice_cancel' invoice.pk %}"
+                  onsubmit="return confirm('{{ DLUX_STRINGS.ui_cancel_confirm|escapejs }}');">{% csrf_token %}
+                <button class="btn btn-outline-danger rounded-pill"><i class="bi bi-x-circle me-1"></i>{{ DLUX_STRINGS.ui_cancel }}</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_items }}</div>
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{{ DLUX_STRINGS.ui_description }}</th>
+                                <th class="text-end">{{ DLUX_STRINGS.ui_unit_price_lyd }}</th>
+                                <th class="text-end">{{ DLUX_STRINGS.ui_qty }}</th>
+                                <th class="text-end">{{ DLUX_STRINGS.label_total_lyd }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>
+                                    {{ item.description }}
+                                    <span class="badge text-bg-light border ms-1">{{ item.kind_label }}</span>
+                                </td>
+                                <td class="text-end">{{ item.unit_price_lyd|floatformat:2 }}</td>
+                                <td class="text-end">{{ item.quantity|floatformat:"-2" }}</td>
+                                <td class="text-end fw-semibold">{{ item.line_total_lyd|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-4">{{ DLUX_STRINGS.ui_no_items }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr><td colspan="3" class="text-end">{{ DLUX_STRINGS.ui_subtotal }}</td><td class="text-end">{{ invoice.subtotal_lyd|floatformat:2 }}</td></tr>
+                            {% if invoice.discount_amount %}
+                            <tr><td colspan="3" class="text-end text-danger">{{ DLUX_STRINGS.ui_discount }}</td><td class="text-end text-danger">− {{ invoice.discount_amount|floatformat:2 }}</td></tr>
+                            {% endif %}
+                            <tr class="table-light fw-bold"><td colspan="3" class="text-end">{{ DLUX_STRINGS.ui_total }}</td><td class="text-end">{{ invoice.total_lyd|floatformat:2 }}</td></tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
+                    <span>{{ DLUX_STRINGS.ui_payments }}</span>
+                    <span>{{ DLUX_STRINGS.ui_balance_due }}: <strong class="{% if invoice.balance_due > 0 %}text-danger{% else %}text-success{% endif %}">{{ invoice.balance_due|floatformat:2 }} LYD</strong></span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead class="table-light"><tr><th>{{ DLUX_STRINGS.ui_date }}</th><th>{{ DLUX_STRINGS.label_method }}</th><th class="text-end">{{ DLUX_STRINGS.label_amount }}</th><th>{{ DLUX_STRINGS.ui_by }}</th></tr></thead>
+                        <tbody>
+                            {% for p in payments %}
+                            <tr>
+                                <td>{{ p.paid_at|date:"Y-m-d H:i" }}</td>
+                                <td>{{ p.method_label }}</td>
+                                <td class="text-end">{{ p.amount|floatformat:2 }}</td>
+                                <td>{{ p.created_by|default:"—" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">{{ DLUX_STRINGS.ui_no_payments }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if invoice.status == 'issued' or invoice.status == 'partial' %}
+                {% if perms.sales.add_payment %}
+                <div class="card-body border-top">
+                    <form method="post" action="{% url 'sales:payment_add' invoice.pk %}" class="row g-2 align-items-end">
+                        {% csrf_token %}
+                        <div class="col-sm-3">{{ payment_form.amount.label_tag }}{{ payment_form.amount }}</div>
+                        <div class="col-sm-3">{{ payment_form.method.label_tag }}{{ payment_form.method }}</div>
+                        <div class="col-sm-3">{{ payment_form.deposit.label_tag }}{{ payment_form.deposit }}</div>
+                        <div class="col-sm-3 d-grid">
+                            <button class="btn btn-primary rounded-pill"><i class="bi bi-cash-coin me-1"></i>{{ DLUX_STRINGS.ui_record_payment }}</button>
+                        </div>
+                    </form>
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_customer }}</div>
+                <div class="card-body">
+                    <p class="mb-1 fw-semibold">{{ invoice.display_customer }}</p>
+                    {% if invoice.customer_phone %}<p class="mb-1 text-muted"><i class="bi bi-telephone me-1"></i>{{ invoice.customer_phone }}</p>{% endif %}
+                    {% if invoice.customer_address %}<p class="mb-0 text-muted"><i class="bi bi-geo-alt me-1"></i>{{ invoice.customer_address }}</p>{% endif %}
+                    {% if invoice.notes %}<hr><p class="mb-0">{{ invoice.notes|linebreaksbr }}</p>{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+# Switch POS — Documentation
+
+Project documentation for the Switch sales system (منظومة مبيعات):
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — apps, layering, the dlux build pattern, money/security baseline
+- [BUSINESS_RULES.md](BUSINESS_RULES.md) — currency, hybrid pricing, frozen-rate rule, invoice lifecycle, inventory
+- [PERMISSIONS.md](PERMISSIONS.md) — roles (Admin vs Sales Staff), `seed_roles`, custom permissions
+- [OPERATIONS.md](OPERATIONS.md) — setup, first-run checklist, key URLs, local dev, migrations
+
+See also the root `CHANGELOG.md` and `VERSION`.
+
+---
+
+# Switch Pos Notes (DjangoLux scaffold notes)
+
+## Recommended Structure
+
+- Put project-owned runtime defaults in `DLUX_CONFIG`
+- Keep DjangoLux integration in `settings.py` via `dlux_settings(globals())`
+- Build full-page forms on `dlux/form_base.html`
+- Build list/filter pages on `dlux/list_base.html`
+- Use `translations.py`, `forms.py`, `filters.py`, and `tables.py` in each app so discovery stays predictable
+- Use `config/celery.py` as the shared Celery entrypoint and keep app tasks in app-local `tasks.py`
+- Use `/health/` as the project health endpoint when checking container readiness
+- Keep secret bootstrap values in `.secrets/.env`; the generated compose file itself stays in the standard inline-env pattern
+
+## Suggested App Pattern
+
+- Use `ScopedModel` for business models that should inherit DjangoLux audit and scope behavior
+- Mark simple lookup datasets with `is_section = True` when they fit the sections workflow
+- Use custom views when the model needs a project-owned flow instead of the system sections screen
+- Keep shared scripts and CSS in the DjangoLux extension hooks instead of overriding the whole base template when possible
+
+## Useful Commands
+
+- `python manage.py dlux_check`
+- `python manage.py dlux_setup`
+- `python -m dlux startapp app_name`
+- `python -m dlux startapp app_name --register`
+- `docker compose -f compose.yml -f compose.dev.yml up`
+- `./start.sh -d`

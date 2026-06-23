@@ -1,0 +1,93 @@
+{% extends "dlux/base.html" %}
+{% load dlux_tags %}
+
+{% block title %}{{ DLUX_STRINGS.ui_sales_report }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1">{{ DLUX_STRINGS.ui_sales_report }}</h1>
+            <p class="text-muted mb-0">{{ report.date_from }} → {{ report.date_to }}</p>
+        </div>
+        <a class="btn btn-success rounded-pill"
+           href="{% url 'sales:report_export' %}?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}">
+            <i class="bi bi-file-earmark-excel me-1"></i>{{ DLUX_STRINGS.ui_export_xlsx }}
+        </a>
+    </div>
+
+    <form method="get" class="row g-2 align-items-end mb-4">
+        <div class="col-auto">
+            <label class="form-label small mb-1">{{ DLUX_STRINGS.ui_from }}</label>
+            <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" class="form-control">
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">{{ DLUX_STRINGS.ui_to }}</label>
+            <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" class="form-control">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary rounded-pill"><i class="bi bi-funnel me-1"></i>{{ DLUX_STRINGS.ui_apply }}</button>
+        </div>
+    </form>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_total_sales }}</div>
+            <div class="h4 mb-0">{{ report.total_sales|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+        </div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_collected }}</div>
+            <div class="h4 mb-0 text-success">{{ report.total_paid|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+        </div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_outstanding }}</div>
+            <div class="h4 mb-0 text-danger">{{ report.outstanding|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+        </div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_invoices_count }}</div>
+            <div class="h4 mb-0">{{ report.invoice_count }}</div>
+        </div></div></div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_top_products }}</div>
+                <div class="table-responsive"><table class="table mb-0 align-middle">
+                    <thead class="table-light"><tr><th>{{ DLUX_STRINGS.label_product }}</th><th class="text-end">{{ DLUX_STRINGS.ui_qty }}</th><th class="text-end">{{ DLUX_STRINGS.label_total_lyd }}</th></tr></thead>
+                    <tbody>
+                        {% for r in report.by_product %}
+                        <tr><td>{{ r.description }}</td><td class="text-end">{{ r.qty|floatformat:"-2" }}</td><td class="text-end">{{ r.total|floatformat:2 }}</td></tr>
+                        {% empty %}<tr><td colspan="3" class="text-center text-muted py-4">{{ DLUX_STRINGS.ui_no_product_sales }}</td></tr>{% endfor %}
+                    </tbody>
+                </table></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_top_services }}</div>
+                <div class="table-responsive"><table class="table mb-0 align-middle">
+                    <thead class="table-light"><tr><th>{{ DLUX_STRINGS.label_service }}</th><th class="text-end">{{ DLUX_STRINGS.ui_qty }}</th><th class="text-end">{{ DLUX_STRINGS.label_total_lyd }}</th></tr></thead>
+                    <tbody>
+                        {% for r in report.by_service %}
+                        <tr><td>{{ r.description }}</td><td class="text-end">{{ r.qty|floatformat:"-2" }}</td><td class="text-end">{{ r.total|floatformat:2 }}</td></tr>
+                        {% empty %}<tr><td colspan="3" class="text-center text-muted py-4">{{ DLUX_STRINGS.ui_no_service_sales }}</td></tr>{% endfor %}
+                    </tbody>
+                </table></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_by_status }}</div>
+        <div class="table-responsive"><table class="table mb-0 align-middle">
+            <thead class="table-light"><tr><th>{{ DLUX_STRINGS.label_status }}</th><th class="text-end">{{ DLUX_STRINGS.ui_count }}</th><th class="text-end">{{ DLUX_STRINGS.label_total_lyd }}</th></tr></thead>
+            <tbody>
+                {% for r in report.by_status %}
+                <tr><td>{{ DLUX_STRINGS|get_item:r.status_key }}</td><td class="text-end">{{ r.count }}</td><td class="text-end">{{ r.total|floatformat:2 }}</td></tr>
+                {% empty %}<tr><td colspan="3" class="text-center text-muted py-4">{{ DLUX_STRINGS.ui_no_sales_range }}</td></tr>{% endfor %}
+            </tbody>
+        </table></div>
+    </div>
+</div>
+{% endblock %}

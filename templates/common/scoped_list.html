@@ -1,0 +1,37 @@
+{% extends "dlux/list_base.html" %}
+{% load crispy_forms_tags %}
+{% load render_table from django_tables2 %}
+
+{% comment %}
+Generic, reusable list page driven entirely by view context:
+  page_title, page_subtitle, add_modal_url, model_verbose_name.
+Create / edit / view / delete are handled by the DjangoLux dynamic modal manager
+(the Add button below + the DluxTable row context menu).
+{% endcomment %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 mb-1">{{ page_title }}</h1>
+            {% if page_subtitle %}<p class="text-muted mb-0">{{ page_subtitle }}</p>{% endif %}
+        </div>
+        {% if add_modal_url %}
+        <button
+            type="button"
+            class="btn btn-primary rounded-pill"
+            data-dynamic-modal="{{ add_modal_url }}"
+            data-modal-title="{{ add_label|default:page_title }}"
+        >
+            <i class="bi bi-plus-lg me-1"></i>{{ add_label|default:"Add" }}
+        </button>
+        {% endif %}
+    </div>
+
+    {% if filter %}
+        <div class="mb-3">{{ filter.form|crispy }}</div>
+    {% endif %}
+
+    {% render_table table %}
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+django-lux==1.2.1
+django-cors-headers
+django-csp
+gunicorn
+psycopg2-binary
+redis
+django-redis
+celery
+django-celery-beat
+django-health-check==3.20.0

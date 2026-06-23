@@ -1,0 +1,38 @@
+# Development override for compose.yml
+# Usage: docker compose -f compose.yml -f compose.dev.yml up
+
+name: switch_pos
+
+services:
+  smtp-relay:
+    build: .
+    image: !reset null
+
+  nginx:
+    ports: !override
+      - target: 80
+        published: "90"
+        protocol: tcp
+
+  web:
+    build: .
+    image: !reset null
+    volumes: !override
+      - ./:/app:rw
+      - static:/app/staticfiles:rw
+      - ./media/:/app/media/:rw
+      - ./logs/:/app/logs:rw
+      - ./imports/:/app/imports:ro
+    environment:
+      BASE_URL: "http://localhost:90"
+      DEBUG_STATUS: "True"
+      NGINX_PORT: "90"
+
+  celery:
+    build: .
+    image: !reset null
+    volumes: !override
+      - ./:/app:rw
+      - static:/app/staticfiles:rw
+      - ./media/:/app/media/:rw
+      - ./logs/:/app/logs:rw

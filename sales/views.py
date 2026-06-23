@@ -1,0 +1,347 @@
+import json
+from decimal import Decimal
+
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.db.models import Count, Sum
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.translation import gettext as _
+from django.views import View
+from django.views.generic import DetailView, TemplateView
+
+from dlux.utils import log_user_action
+
+from common.views import ScopedListView
+from finance.models import CashDeposit, ExchangeRate
+from finance.services import get_current_rate, has_configured_rate
+
+from .filters import CustomerFilter, InvoiceFilter, PaymentFilter
+from .forms import CustomerForm, InvoiceForm, InvoiceItemFormSet, PaymentForm
+from .models import Customer, Invoice, Payment
+from .reports import build_sales_report, build_sales_report_xlsx, parse_window
+from .services import cancel_invoice, issue_invoice
+from .tables import CustomerTable, InvoiceTable, PaymentTable
+
+
+# --------------------------------------------------------------------------- #
+# Simple list pages
+# --------------------------------------------------------------------------- #
+class CustomerListView(ScopedListView):
+    model = Customer
+    permission_required = "sales.view_customer"
+    table_class = CustomerTable
+    filterset_class = CustomerFilter
+    page_title_key = "page_customers"
+
+
+class PaymentListView(ScopedListView):
+    model = Payment
+    permission_required = "sales.view_payment"
+    table_class = PaymentTable
+    filterset_class = PaymentFilter
+    page_title_key = "page_payments"
+    allow_add = False
+
+
+class InvoiceListView(ScopedListView):
+    model = Invoice
+    permission_required = "sales.view_invoice"
+    table_class = InvoiceTable
+    filterset_class = InvoiceFilter
+    template_name = "sales/invoice_list.html"
+    page_title = "Invoices"
+    allow_add = False  # creation is a full-page flow, not a modal
+
+
+# --------------------------------------------------------------------------- #
+# Invoice editor (multi-line, full page)
+# --------------------------------------------------------------------------- #
+def _apply_item_price(item, invoice):
+    """Derive frozen unit price / kind from the chosen product or service when
+    the user didn't type a price explicitly."""
+    if item.product_id:
+        item.kind = item.KIND_PRODUCT
+        item.service = None
+        if item.unit_price_lyd in (None, ""):
+            item.unit_price_lyd = item.product.selling_price_lyd(invoice.exchange_rate) or Decimal("0")
+        item.unit_price_usd = item.product.effective_price_usd
+    elif item.service_id:
+        item.kind = item.KIND_SERVICE
+        item.product = None
+        if item.unit_price_lyd in (None, ""):
+            item.unit_price_lyd = item.service.selling_price_lyd(invoice.exchange_rate) or Decimal("0")
+        item.unit_price_usd = item.service.price_usd
+    else:
+        item.kind = item.KIND_CUSTOM
+        if item.unit_price_lyd in (None, ""):
+            item.unit_price_lyd = Decimal("0")
+
+
+class _InvoiceEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    raise_exception = True
+    template_name = "sales/invoice_form.html"
+
+    def _price_map(self, rate):
+        """JSON {kind: {id: lyd_price}} so the editor can auto-fill unit prices."""
+        from catalog.models import Product, Service
+
+        products = {
+            str(p.pk): float(p.selling_price_lyd(rate) or 0)
+            for p in Product.objects.filter(is_active=True)
+        }
+        services = {
+            str(s.pk): float(s.selling_price_lyd(rate) or 0)
+            for s in Service.objects.filter(is_active=True)
+        }
+        return json.dumps({"product": products, "service": services})
+
+    def _context(self, request, form, formset, invoice=None):
+        rate = invoice.exchange_rate if invoice else get_current_rate()
+        return {
+            "form": form,
+            "formset": formset,
+            "invoice": invoice,
+            "current_rate": rate,
+            "has_rate": has_configured_rate(),
+            "is_edit": invoice is not None,
+            "price_map_json": self._price_map(rate),
+        }
+
+    def _save(self, request, form, formset, invoice=None):
+        with transaction.atomic():
+            invoice = form.save(commit=False)
+            if invoice.exchange_rate is None:
+                invoice.exchange_rate = get_current_rate()
+            if invoice.customer_id and not invoice.customer_name:
+                invoice.customer_name = invoice.customer.name
+                invoice.customer_phone = invoice.customer_phone or invoice.customer.phone
+                invoice.customer_address = invoice.customer_address or invoice.customer.address
+            invoice.save()
+            formset.instance = invoice
+            items = formset.save(commit=False)
+            for obj in items:
+                _apply_item_price(obj, invoice)
+                obj.save()
+            for obj in formset.deleted_objects:
+                obj.delete()
+            invoice.recalc_totals()
+            log_user_action(request, "UPDATE" if invoice.pk else "CREATE", instance=invoice)
+        return invoice
+
+
+class InvoiceCreateView(_InvoiceEditorView):
+    permission_required = "sales.add_invoice"
+
+    def get(self, request):
+        form = InvoiceForm()
+        formset = InvoiceItemFormSet()
+        return render(request, self.template_name, self._context(request, form, formset))
+
+    def post(self, request):
+        form = InvoiceForm(request.POST)
+        formset = InvoiceItemFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            invoice = self._save(request, form, formset)
+            messages.success(request, _("Invoice %(no)s saved as draft.") % {"no": invoice.number})
+            return redirect("sales:invoice_detail", pk=invoice.pk)
+        return render(request, self.template_name, self._context(request, form, formset))
+
+
+class InvoiceUpdateView(_InvoiceEditorView):
+    permission_required = "sales.change_invoice"
+
+    def _get_invoice(self, pk):
+        invoice = get_object_or_404(Invoice, pk=pk)
+        return invoice
+
+    def get(self, request, pk):
+        invoice = self._get_invoice(pk)
+        if not invoice.is_editable:
+            messages.warning(request, _("Only draft invoices can be edited."))
+            return redirect("sales:invoice_detail", pk=invoice.pk)
+        form = InvoiceForm(instance=invoice)
+        formset = InvoiceItemFormSet(instance=invoice)
+        return render(request, self.template_name, self._context(request, form, formset, invoice))
+
+    def post(self, request, pk):
+        invoice = self._get_invoice(pk)
+        if not invoice.is_editable:
+            messages.warning(request, _("Only draft invoices can be edited."))
+            return redirect("sales:invoice_detail", pk=invoice.pk)
+        form = InvoiceForm(request.POST, instance=invoice)
+        formset = InvoiceItemFormSet(request.POST, instance=invoice)
+        if form.is_valid() and formset.is_valid():
+            invoice = self._save(request, form, formset, invoice)
+            messages.success(request, _("Invoice %(no)s updated.") % {"no": invoice.number})
+            return redirect("sales:invoice_detail", pk=invoice.pk)
+        return render(request, self.template_name, self._context(request, form, formset, invoice))
+
+
+# --------------------------------------------------------------------------- #
+# Invoice detail + lifecycle actions
+# --------------------------------------------------------------------------- #
+class InvoiceDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = Invoice
+    permission_required = "sales.view_invoice"
+    raise_exception = True
+    template_name = "sales/invoice_detail.html"
+    context_object_name = "invoice"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        invoice = self.object
+        ctx["items"] = invoice.items.all()
+        ctx["payments"] = invoice.payments.all()
+        ctx["payment_form"] = PaymentForm()
+        return ctx
+
+
+class InvoiceIssueView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "sales.issue_invoice"
+    raise_exception = True
+
+    def post(self, request, pk):
+        invoice = get_object_or_404(Invoice, pk=pk)
+        try:
+            issue_invoice(invoice, request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("sales:invoice_detail", pk=pk)
+        log_user_action(request, "ISSUE", instance=invoice)
+        messages.success(request, _("Invoice %(no)s issued. Stock updated.") % {"no": invoice.number})
+        return redirect("sales:invoice_detail", pk=pk)
+
+
+class InvoiceCancelView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "sales.cancel_invoice"
+    raise_exception = True
+
+    def post(self, request, pk):
+        invoice = get_object_or_404(Invoice, pk=pk)
+        cancel_invoice(invoice, request.user)
+        log_user_action(request, "CANCEL", instance=invoice)
+        messages.warning(request, _("Invoice %(no)s cancelled.") % {"no": invoice.number})
+        return redirect("sales:invoice_detail", pk=pk)
+
+
+class InvoicePrintView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = Invoice
+    permission_required = "sales.view_invoice"
+    raise_exception = True
+    template_name = "sales/invoice_print.html"
+    context_object_name = "invoice"
+
+    def get_context_data(self, **kwargs):
+        from dlux.translations import get_current_language_code
+
+        ctx = super().get_context_data(**kwargs)
+        ctx["items"] = self.object.items.all()
+        ctx["payments"] = self.object.payments.all()
+        lang = get_current_language_code(self.request)
+        ctx["doc_lang"] = lang
+        ctx["is_rtl"] = lang.startswith("ar")
+        return ctx
+
+
+class PaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "sales.add_payment"
+    raise_exception = True
+
+    def post(self, request, pk):
+        invoice = get_object_or_404(Invoice, pk=pk)
+        if invoice.status in (Invoice.STATUS_DRAFT, Invoice.STATUS_CANCELLED):
+            messages.error(request, _("Issue the invoice before recording payments."))
+            return redirect("sales:invoice_detail", pk=pk)
+        form = PaymentForm(request.POST)
+        if form.is_valid():
+            payment = form.save(commit=False)
+            payment.invoice = invoice
+            payment.save()  # recalc_payments runs in Payment.save()
+            log_user_action(request, "PAYMENT", instance=invoice)
+            messages.success(request, _("Payment recorded."))
+        else:
+            messages.error(request, _("Could not record payment. Check the amount."))
+        return redirect("sales:invoice_detail", pk=pk)
+
+
+# --------------------------------------------------------------------------- #
+# Dashboard (intended as the system home page)
+# --------------------------------------------------------------------------- #
+class DashboardView(LoginRequiredMixin, TemplateView):
+    template_name = "sales/dashboard.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        today = timezone.localdate()
+        month_start = today.replace(day=1)
+        live_statuses = [Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL, Invoice.STATUS_PAID]
+
+        today_qs = Invoice.objects.filter(invoice_date=today, status__in=live_statuses)
+        month_qs = Invoice.objects.filter(invoice_date__gte=month_start, status__in=live_statuses)
+
+        ctx["current_rate"] = get_current_rate()
+        ctx["has_rate"] = has_configured_rate()
+        ctx["latest_rate_row"] = ExchangeRate.objects.order_by("-created_at").first()
+        ctx["sales_today"] = today_qs.aggregate(t=Sum("total_lyd"))["t"] or Decimal("0")
+        ctx["count_today"] = today_qs.count()
+        ctx["sales_month"] = month_qs.aggregate(t=Sum("total_lyd"))["t"] or Decimal("0")
+        ctx["outstanding"] = (
+            Invoice.objects.filter(status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL])
+            .aggregate(t=Sum("total_lyd"))["t"] or Decimal("0")
+        ) - (
+            Invoice.objects.filter(status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL])
+            .aggregate(t=Sum("amount_paid"))["t"] or Decimal("0")
+        )
+        ctx["draft_count"] = Invoice.objects.filter(status=Invoice.STATUS_DRAFT).count()
+        ctx["pending_deposits"] = CashDeposit.objects.filter(status=CashDeposit.STATUS_PENDING).count()
+        ctx["recent_invoices"] = Invoice.objects.order_by("-created_at")[:8]
+
+        from catalog.models import Product
+
+        low = [p for p in Product.objects.filter(track_stock=True, is_active=True) if p.is_low_stock]
+        ctx["low_stock"] = low[:8]
+        ctx["low_stock_count"] = len(low)
+        return ctx
+
+
+# --------------------------------------------------------------------------- #
+# Sales reporting (+ XLSX export)
+# --------------------------------------------------------------------------- #
+class SalesReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    permission_required = "sales.view_sales_report"
+    raise_exception = True
+    template_name = "sales/report.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        date_from, date_to = parse_window(
+            self.request.GET.get("date_from"), self.request.GET.get("date_to")
+        )
+        ctx["report"] = build_sales_report(date_from, date_to, self.request.user)
+        ctx["date_from"] = date_from
+        ctx["date_to"] = date_to
+        return ctx
+
+
+class SalesReportExportView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = "sales.view_sales_report"
+    raise_exception = True
+
+    def get(self, request):
+        date_from, date_to = parse_window(request.GET.get("date_from"), request.GET.get("date_to"))
+        report = build_sales_report(date_from, date_to, request.user)
+        content = build_sales_report_xlsx(report)
+        log_user_action(request, "EXPORT", model_name="Sales Report")
+        response = HttpResponse(
+            content,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = (
+            f'attachment; filename="sales_report_{date_from}_{date_to}.xlsx"'
+        )
+        return response

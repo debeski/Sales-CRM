@@ -1,0 +1,192 @@
+{% extends "dlux/form_base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if is_edit %}{{ DLUX_STRINGS.ui_edit_invoice }}{% else %}{{ DLUX_STRINGS.ui_new_invoice }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h1 class="h3 mb-0">
+            {% if is_edit %}{{ DLUX_STRINGS.ui_edit_invoice }} {{ invoice.number }}{% else %}{{ DLUX_STRINGS.ui_new_invoice }}{% endif %}
+        </h1>
+        <span class="badge rounded-pill text-bg-light border">
+            <i class="bi bi-currency-exchange me-1"></i>
+            {{ DLUX_STRINGS.ui_rate }}: 1 USD = {{ current_rate }} LYD
+            {% if not has_rate %}<span class="text-danger">{{ DLUX_STRINGS.ui_no_rate_set }}</span>{% endif %}
+        </span>
+    </div>
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_customer_details }}</div>
+            <div class="card-body">{{ form|crispy }}</div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">{{ DLUX_STRINGS.ui_line_items }}</span>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" id="add-line">
+                    <i class="bi bi-plus-lg me-1"></i>{{ DLUX_STRINGS.ui_add_line }}
+                </button>
+            </div>
+            <div class="card-body p-0">
+                {{ formset.management_form }}
+                {% if formset.non_form_errors %}
+                    <div class="alert alert-danger m-3">{{ formset.non_form_errors }}</div>
+                {% endif %}
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0" id="items-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="min-width:180px">{{ DLUX_STRINGS.label_product }}</th>
+                                <th style="min-width:180px">{{ DLUX_STRINGS.label_service }}</th>
+                                <th style="min-width:160px">{{ DLUX_STRINGS.ui_description }}</th>
+                                <th class="text-end" style="min-width:120px">{{ DLUX_STRINGS.ui_unit_price_lyd }}</th>
+                                <th class="text-end" style="width:100px">{{ DLUX_STRINGS.ui_qty }}</th>
+                                <th class="text-end" style="min-width:120px">{{ DLUX_STRINGS.ui_total }}</th>
+                                <th style="width:48px"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="items-body">
+                            {% for itemform in formset %}
+                            <tr class="line-row">
+                                {{ itemform.id }}{{ itemform.kind.as_hidden }}
+                                <td>{{ itemform.product }}</td>
+                                <td>{{ itemform.service }}</td>
+                                <td>{{ itemform.description }}</td>
+                                <td>{{ itemform.unit_price_lyd }}</td>
+                                <td>{{ itemform.quantity }}</td>
+                                <td class="text-end fw-semibold line-total">0.00</td>
+                                <td class="text-center">
+                                    <span class="d-none">{{ itemform.DELETE }}</span>
+                                    <button type="button" class="btn btn-sm btn-link text-danger del-line" title="Remove">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <td colspan="5" class="text-end fw-semibold">{{ DLUX_STRINGS.ui_subtotal }}</td>
+                                <td class="text-end fw-semibold" id="subtotal-cell">0.00</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+            <a href="{% if is_edit %}{% url 'sales:invoice_detail' invoice.pk %}{% else %}{% url 'sales:invoice_list' %}{% endif %}"
+               class="btn btn-outline-secondary rounded-pill">{{ DLUX_STRINGS.ui_cancel }}</a>
+            <button type="submit" class="btn btn-success rounded-pill px-4">
+                <i class="bi bi-save me-1"></i>{{ DLUX_STRINGS.ui_save_draft }}
+            </button>
+        </div>
+    </form>
+</div>
+
+{# Template row for cloning #}
+<template id="empty-form-row">
+    <tr class="line-row">
+        {{ formset.empty_form.id }}{{ formset.empty_form.kind.as_hidden }}
+        <td>{{ formset.empty_form.product }}</td>
+        <td>{{ formset.empty_form.service }}</td>
+        <td>{{ formset.empty_form.description }}</td>
+        <td>{{ formset.empty_form.unit_price_lyd }}</td>
+        <td>{{ formset.empty_form.quantity }}</td>
+        <td class="text-end fw-semibold line-total">0.00</td>
+        <td class="text-center">
+            <span class="d-none">{{ formset.empty_form.DELETE }}</span>
+            <button type="button" class="btn btn-sm btn-link text-danger del-line" title="Remove">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script id="price-map" type="application/json">{{ price_map_json|safe }}</script>
+<script>
+(function () {
+    const prices = JSON.parse(document.getElementById('price-map').textContent || '{}');
+    const prefix = "{{ formset.prefix }}";
+    const totalForms = document.getElementById('id_' + prefix + '-TOTAL_FORMS');
+    const body = document.getElementById('items-body');
+
+    const fmt = (n) => (isNaN(n) ? 0 : n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    function q(row, suffix) { return row.querySelector('[name$="-' + suffix + '"]'); }
+
+    function recalcRow(row) {
+        const price = parseFloat(q(row, 'unit_price_lyd')?.value) || 0;
+        const qty = parseFloat(q(row, 'quantity')?.value) || 0;
+        const cell = row.querySelector('.line-total');
+        if (cell) cell.textContent = fmt(price * qty);
+        return price * qty;
+    }
+
+    function recalcAll() {
+        let subtotal = 0;
+        body.querySelectorAll('.line-row').forEach((row) => {
+            if (row.style.display === 'none') return;
+            subtotal += recalcRow(row);
+        });
+        document.getElementById('subtotal-cell').textContent = fmt(subtotal);
+    }
+
+    function autofill(row, kind, id) {
+        const map = prices[kind] || {};
+        const priceInput = q(row, 'unit_price_lyd');
+        const kindInput = q(row, 'kind');
+        if (kindInput) kindInput.value = kind;
+        if (priceInput && map[id] !== undefined && !priceInput.dataset.touched) {
+            priceInput.value = map[id];
+        }
+        recalcAll();
+    }
+
+    function wireRow(row) {
+        const prod = q(row, 'product');
+        const svc = q(row, 'service');
+        const price = q(row, 'unit_price_lyd');
+        const qty = q(row, 'quantity');
+        if (prod) prod.addEventListener('change', () => {
+            if (prod.value) { if (svc) svc.value = ''; autofill(row, 'product', prod.value); }
+        });
+        if (svc) svc.addEventListener('change', () => {
+            if (svc.value) { if (prod) prod.value = ''; autofill(row, 'service', svc.value); }
+        });
+        if (price) { price.addEventListener('input', () => { price.dataset.touched = '1'; recalcAll(); }); }
+        if (qty) qty.addEventListener('input', recalcAll);
+        const del = row.querySelector('.del-line');
+        if (del) del.addEventListener('click', () => {
+            const delInput = q(row, 'DELETE');
+            if (delInput) { delInput.checked = true; row.style.display = 'none'; }
+            else { row.remove(); }
+            recalcAll();
+        });
+    }
+
+    document.getElementById('add-line').addEventListener('click', () => {
+        const idx = parseInt(totalForms.value, 10);
+        const html = document.getElementById('empty-form-row').innerHTML.replace(/__prefix__/g, idx);
+        const holder = document.createElement('tbody');
+        holder.innerHTML = html.trim();
+        const tr = holder.firstElementChild;
+        body.appendChild(tr);
+        totalForms.value = idx + 1;
+        wireRow(tr);
+    });
+
+    body.querySelectorAll('.line-row').forEach(wireRow);
+    recalcAll();
+})();
+</script>
+{% endblock %}

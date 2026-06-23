@@ -1,0 +1,300 @@
+"""
+Sales domain models — invoices and the money around them.
+
+``sales`` sits at the top of the dependency stack: it may use ``catalog``
+(Product / Service) and ``finance`` (the rate). Nothing depends on ``sales``.
+
+Money rule of the house: every invoice **freezes** the USD→LYD rate it was
+created with (``exchange_rate``) and every line **freezes** its own
+``unit_price_lyd``. Later rate changes never rewrite a past invoice's totals.
+"""
+from decimal import Decimal, ROUND_HALF_UP
+
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
+from django.db import models
+from django.utils import timezone
+
+from dlux.models import ScopedModel
+
+from finance.services import get_current_rate, quantize_lyd
+
+TWO_PLACES = Decimal("0.01")
+
+
+class Customer(ScopedModel):
+    """A buyer. Optional on an invoice — walk-in sales just type a name."""
+
+    name = models.CharField(max_length=200, verbose_name="Name")
+    phone = models.CharField(max_length=40, blank=True, db_index=True, verbose_name="Phone")
+    address = models.CharField(max_length=255, blank=True, verbose_name="Address")
+    notes = models.TextField(blank=True, verbose_name="Notes")
+    is_active = models.BooleanField(default=True, verbose_name="Active")
+
+    class Meta:
+        verbose_name = "Customer"
+        verbose_name_plural = "Customers"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Invoice(ScopedModel):
+    STATUS_DRAFT = "draft"
+    STATUS_ISSUED = "issued"
+    STATUS_PARTIAL = "partial"
+    STATUS_PAID = "paid"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = (
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_ISSUED, "Issued"),
+        (STATUS_PARTIAL, "Partially Paid"),
+        (STATUS_PAID, "Paid"),
+        (STATUS_CANCELLED, "Cancelled"),
+    )
+
+    number = models.CharField(max_length=20, unique=True, blank=True, verbose_name="Invoice No.")
+    customer = models.ForeignKey(
+        Customer, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="invoices", verbose_name="Customer",
+    )
+    # Snapshot fields so historical invoices stay intact even if the customer
+    # record is edited or removed later (walk-ins set these directly).
+    customer_name = models.CharField(max_length=200, blank=True, verbose_name="Customer Name")
+    customer_phone = models.CharField(max_length=40, blank=True, verbose_name="Customer Phone")
+    customer_address = models.CharField(max_length=255, blank=True, verbose_name="Customer Address")
+
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=STATUS_DRAFT, db_index=True,
+        verbose_name="Status",
+    )
+    invoice_date = models.DateField(default=timezone.localdate, verbose_name="Invoice Date")
+
+    # Frozen rate this invoice is bound to.
+    exchange_rate = models.DecimalField(
+        max_digits=12, decimal_places=4, verbose_name="Exchange Rate (LYD/USD)"
+    )
+    exchange_rate_obj = models.ForeignKey(
+        "finance.ExchangeRate", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="invoices", editable=False, verbose_name="Rate Record",
+    )
+
+    discount_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Discount %",
+    )
+    discount_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Discount (LYD)",
+    )
+
+    subtotal_lyd = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"), editable=False, verbose_name="Subtotal (LYD)")
+    total_lyd = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"), editable=False, verbose_name="Total (LYD)")
+    amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"), editable=False, verbose_name="Amount Paid (LYD)")
+
+    notes = models.TextField(blank=True, verbose_name="Notes")
+    issued_at = models.DateTimeField(null=True, blank=True, editable=False, verbose_name="Issued At")
+
+    class Meta:
+        verbose_name = "Invoice"
+        verbose_name_plural = "Invoices"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"], name="sales_inv_status_idx"),
+            models.Index(fields=["-invoice_date"], name="sales_inv_date_idx"),
+        ]
+        permissions = [
+            ("issue_invoice", "Can issue (finalize) invoices"),
+            ("cancel_invoice", "Can cancel invoices"),
+            ("view_sales_report", "Can view sales reports"),
+        ]
+
+    def __str__(self):
+        return self.number or f"(draft #{self.pk})"
+
+    def save(self, *args, **kwargs):
+        if self.exchange_rate is None:
+            self.exchange_rate = get_current_rate()
+        super().save(*args, **kwargs)
+        if not self.number:
+            self.number = f"INV-{self.pk:06d}"
+            super().save(update_fields=["number"])
+
+    # --- Derived display helpers ---
+    @property
+    def balance_due(self):
+        return quantize_lyd(self.total_lyd - self.amount_paid)
+
+    @property
+    def display_customer(self):
+        if self.customer_id:
+            return self.customer.name
+        if self.customer_name:
+            return self.customer_name
+        from common.i18n import t
+        return t("ui_walk_in", "Walk-in")
+
+    @property
+    def is_editable(self):
+        """Only drafts may have their lines / header changed."""
+        return self.status == self.STATUS_DRAFT
+
+    @property
+    def status_label(self):
+        """Localized status label for the active request language."""
+        from common.i18n import t
+        return t(f"status_{self.status}", self.get_status_display())
+
+    # --- Money recalculation ---
+    def recalc_totals(self, commit=True):
+        subtotal = sum((i.line_total_lyd for i in self.items.all()), Decimal("0.00"))
+        if self.discount_percent and self.discount_percent > 0:
+            discount = (subtotal * self.discount_percent / Decimal("100"))
+        else:
+            discount = self.discount_amount or Decimal("0.00")
+        discount = min(discount, subtotal)
+        self.subtotal_lyd = quantize_lyd(subtotal)
+        self.discount_amount = quantize_lyd(discount)
+        self.total_lyd = quantize_lyd(subtotal - discount)
+        if commit:
+            self.save(update_fields=["subtotal_lyd", "discount_amount", "total_lyd", "updated_at"])
+
+    def recalc_payments(self, commit=True):
+        # Read the persisted status first: this may be called from Payment.save()
+        # holding an invoice instance whose in-memory status is stale (e.g. issued
+        # elsewhere in the same request). Trusting it would clobber the real status.
+        db_status = type(self).all_objects.filter(pk=self.pk).values_list("status", flat=True).first()
+        if db_status is not None:
+            self.status = db_status
+        paid = sum((p.amount for p in self.payments.all()), Decimal("0.00"))
+        self.amount_paid = quantize_lyd(paid)
+        # Status only advances for live (non-draft, non-cancelled) invoices.
+        if self.status in (self.STATUS_ISSUED, self.STATUS_PARTIAL, self.STATUS_PAID):
+            if self.total_lyd > 0 and self.amount_paid >= self.total_lyd:
+                self.status = self.STATUS_PAID
+            elif self.amount_paid > 0:
+                self.status = self.STATUS_PARTIAL
+            else:
+                self.status = self.STATUS_ISSUED
+        if commit:
+            self.save(update_fields=["amount_paid", "status", "updated_at"])
+
+
+class InvoiceItem(models.Model):
+    """A single line on an invoice. Prices are snapshots frozen at line creation.
+
+    A line is a Product, a Service, or a free-text "custom" line (for the
+    occasional unrelated goods Switch resells). ``description`` is always stored
+    so the printed invoice never changes if the source product is later renamed.
+    """
+
+    KIND_PRODUCT = "product"
+    KIND_SERVICE = "service"
+    KIND_CUSTOM = "custom"
+    KIND_CHOICES = (
+        (KIND_PRODUCT, "Product"),
+        (KIND_SERVICE, "Service"),
+        (KIND_CUSTOM, "Custom"),
+    )
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="items")
+    kind = models.CharField(max_length=12, choices=KIND_CHOICES, default=KIND_PRODUCT, verbose_name="Kind")
+    product = models.ForeignKey(
+        "catalog.Product", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="invoice_items", verbose_name="Product",
+    )
+    service = models.ForeignKey(
+        "catalog.Service", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="invoice_items", verbose_name="Service",
+    )
+    description = models.CharField(max_length=255, verbose_name="Description")
+    unit_price_lyd = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Unit Price (LYD)")
+    unit_price_usd = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Unit Price (USD)")
+    quantity = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("1.00"),
+        validators=[MinValueValidator(Decimal("0.01"))], verbose_name="Quantity",
+    )
+    line_total_lyd = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"), editable=False, verbose_name="Line Total (LYD)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Invoice Item"
+        verbose_name_plural = "Invoice Items"
+        default_permissions = ()  # managed through the parent Invoice
+        ordering = ["pk"]
+
+    def __str__(self):
+        return f"{self.description} × {self.quantity}"
+
+    @property
+    def kind_label(self):
+        from common.i18n import t
+        return t(f"kind_{self.kind}", self.get_kind_display())
+
+    def clean(self):
+        if self.kind == self.KIND_PRODUCT and not self.product_id:
+            raise ValidationError({"product": "Select a product for a product line."})
+        if self.kind == self.KIND_SERVICE and not self.service_id:
+            raise ValidationError({"service": "Select a service for a service line."})
+
+    def save(self, *args, **kwargs):
+        # Snapshot a description from the source if the user left it blank.
+        if not self.description:
+            if self.product_id:
+                self.description = self.product.name
+            elif self.service_id:
+                self.description = self.service.name
+        self.line_total_lyd = (Decimal(self.unit_price_lyd) * Decimal(self.quantity)).quantize(
+            TWO_PLACES, rounding=ROUND_HALF_UP
+        )
+        super().save(*args, **kwargs)
+
+
+class Payment(ScopedModel):
+    """A payment received against an invoice. Maintains the invoice's paid total."""
+
+    METHOD_CASH = "cash"
+    METHOD_BANK = "bank_transfer"
+    METHOD_CHEQUE = "cheque"
+    METHOD_CHOICES = (
+        (METHOD_CASH, "Cash"),
+        (METHOD_BANK, "Bank Transfer"),
+        (METHOD_CHEQUE, "Cheque"),
+    )
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="payments", verbose_name="Invoice")
+    amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))], verbose_name="Amount (LYD)",
+    )
+    method = models.CharField(max_length=20, choices=METHOD_CHOICES, default=METHOD_CASH, verbose_name="Method")
+    paid_at = models.DateTimeField(default=timezone.now, verbose_name="Paid At")
+    deposit = models.ForeignKey(
+        "finance.CashDeposit", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="payments", verbose_name="Linked Cash Deposit",
+    )
+    notes = models.CharField(max_length=255, blank=True, verbose_name="Notes")
+
+    class Meta:
+        verbose_name = "Payment"
+        verbose_name_plural = "Payments"
+        ordering = ["-paid_at"]
+
+    def __str__(self):
+        return f"{self.amount} LYD on {self.invoice_id}"
+
+    @property
+    def method_label(self):
+        from common.i18n import t
+        return t(f"method_{self.method}", self.get_method_display())
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.invoice.recalc_payments()
+
+    def delete(self, *args, **kwargs):
+        invoice = self.invoice
+        super().delete(*args, **kwargs)
+        invoice.recalc_payments()

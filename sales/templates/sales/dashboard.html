@@ -1,0 +1,110 @@
+{% extends "dlux/base.html" %}
+
+{% block title %}{{ DLUX_STRINGS.ui_dashboard }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h1 class="h3 mb-0">{{ DLUX_STRINGS.ui_dashboard }}</h1>
+        <div class="d-flex gap-2">
+            {% if perms.sales.view_sales_report %}
+            <a href="{% url 'sales:report' %}" class="btn btn-outline-secondary rounded-pill"><i class="bi bi-graph-up me-1"></i>{{ DLUX_STRINGS.ui_reports }}</a>
+            {% endif %}
+            {% if perms.sales.add_invoice %}
+            <a href="{% url 'sales:invoice_create' %}" class="btn btn-primary rounded-pill"><i class="bi bi-plus-lg me-1"></i>{{ DLUX_STRINGS.ui_new_invoice }}</a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if not has_rate %}
+    <div class="alert alert-warning d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <a href="{% url 'finance:exchange_rate_list' %}" class="alert-link">{{ DLUX_STRINGS.ui_rate_warning }}</a>
+    </div>
+    {% endif %}
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_sales_today }}</div>
+                <div class="h4 mb-0">{{ sales_today|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+                <div class="small text-muted">{{ count_today }} {{ DLUX_STRINGS.ui_invoices_word }}</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_sales_month }}</div>
+                <div class="h4 mb-0">{{ sales_month|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_outstanding }}</div>
+                <div class="h4 mb-0 text-danger">{{ outstanding|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+                <div class="small text-muted">{{ draft_count }} {{ DLUX_STRINGS.ui_drafts }}</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_exchange_rate }}</div>
+                <div class="h4 mb-0">{{ current_rate }} <span class="fs-6 text-muted">LYD/USD</span></div>
+                <div class="small text-muted">{% if latest_rate_row %}{{ latest_rate_row.created_at|date:"Y-m-d" }}{% else %}—{% endif %}</div>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
+                    <span>{{ DLUX_STRINGS.ui_recent_invoices }}</span>
+                    <a href="{% url 'sales:invoice_list' %}" class="small text-decoration-none">{{ DLUX_STRINGS.ui_view_all }}</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead class="table-light"><tr><th>{{ DLUX_STRINGS.label_number }}</th><th>{{ DLUX_STRINGS.ui_customer }}</th><th>{{ DLUX_STRINGS.label_status }}</th><th class="text-end">{{ DLUX_STRINGS.ui_total }}</th></tr></thead>
+                        <tbody>
+                            {% for inv in recent_invoices %}
+                            <tr>
+                                <td><a href="{% url 'sales:invoice_detail' inv.pk %}" class="text-decoration-none">{{ inv.number }}</a></td>
+                                <td>{{ inv.display_customer }}</td>
+                                <td><span class="badge rounded-pill
+                                    {% if inv.status == 'paid' %}bg-success{% elif inv.status == 'partial' %}bg-warning text-dark{% elif inv.status == 'issued' %}bg-info text-dark{% elif inv.status == 'cancelled' %}bg-danger{% else %}bg-secondary{% endif %}">{{ inv.status_label }}</span></td>
+                                <td class="text-end">{{ inv.total_lyd|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center text-muted py-4">{{ DLUX_STRINGS.ui_no_invoices }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
+                    <span><i class="bi bi-exclamation-triangle text-warning me-1"></i>{{ DLUX_STRINGS.ui_low_stock }}</span>
+                    <span class="badge bg-warning text-dark rounded-pill">{{ low_stock_count }}</span>
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% for p in low_stock %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        <span>{{ p.name }}</span>
+                        <span class="text-danger fw-semibold">{{ p.stock_qty|floatformat:"-2" }}</span>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-muted text-center py-4">{{ DLUX_STRINGS.ui_stock_healthy }}</li>
+                    {% endfor %}
+                </ul>
+                {% if pending_deposits %}
+                <div class="card-body border-top">
+                    <a href="{% url 'finance:cash_deposit_list' %}" class="text-decoration-none">
+                        <i class="bi bi-cash-stack me-1"></i>{{ pending_deposits }} {{ DLUX_STRINGS.ui_deposits_pending }}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
