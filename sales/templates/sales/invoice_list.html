@@ -19,7 +19,8 @@
     </div>
 
     {% if filter %}
-        <div class="mb-3">{{ filter.form|crispy }}</div>
+        {# Render via the crispy TAG (below), not the crispy filter, so form.helper / advanced_filter_helper renders. #}
+        <div class="no-print mb-3">{% crispy filter.form %}</div>
     {% endif %}
 
     {% render_table table %}

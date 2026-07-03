@@ -1,4 +1,5 @@
 {% extends "dlux/list_base.html" %}
+{% load static %}
 {% load crispy_forms_tags %}
 {% load render_table from django_tables2 %}
 
@@ -10,7 +11,10 @@ Create / edit / view / delete are handled by the DjangoLux dynamic modal manager
 {% endcomment %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-fluid py-4"
+     data-scoped-crud
+     data-modal-base-url="{{ modal_base_url }}"
+     data-modal-delete-url="{{ modal_delete_url }}">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h1 class="h3 mb-1">{{ page_title }}</h1>
@@ -29,9 +33,15 @@ Create / edit / view / delete are handled by the DjangoLux dynamic modal manager
     </div>
 
     {% if filter %}
-        <div class="mb-3">{{ filter.form|crispy }}</div>
+        {# Render via the crispy TAG (below), not the crispy filter: the filter drops form.helper — the advanced_filter_helper layout. #}
+        <div class="no-print mb-3">{% crispy filter.form %}</div>
     {% endif %}
 
     {% render_table table %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+    {{ block.super }}
+    <script src="{% static 'common/js/scoped_crud.js' %}" nonce="{{ request.csp_nonce }}" defer></script>
 {% endblock %}

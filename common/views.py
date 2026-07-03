@@ -14,7 +14,9 @@ from django_filters.views import FilterView
 from django_tables2 import SingleTableMixin
 
 from dlux.translations import get_current_language_code, get_strings
-from dlux.utils import get_user_scope, is_scope_enabled, setup_filter_helper
+from dlux.utils import advanced_filter_helper, get_user_scope, is_scope_enabled
+
+from common.forms import translate_choice_fields
 
 
 def scope_filtered_queryset(queryset, user):
@@ -50,6 +52,8 @@ class ScopedListView(LoginRequiredMixin, PermissionRequiredMixin, SingleTableMix
     page_subtitle = ""
     #: set False for models that should not be created from the list page
     allow_add = True
+    #: optional advanced_filter_helper config (see dlux.utils.advanced_filter_helper)
+    filter_config = None
 
     def get_queryset(self):
         qs = self.model._default_manager.all()
@@ -60,12 +64,31 @@ class ScopedListView(LoginRequiredMixin, PermissionRequiredMixin, SingleTableMix
 
     def get_filterset(self, filterset_class):
         filterset = super().get_filterset(filterset_class)
-        setup_filter_helper(filterset, request=self.request)
+        # advanced_filter_helper builds the pill-shaped search bar + an advanced
+        # collapse and, via set_field_attrs, gives every dropdown a first-choice
+        # label and every text field a placeholder. Each FilterSet declares its
+        # own layout in an ``advanced_config`` attribute (primary row vs. the
+        # advanced collapse); the view may override it via ``filter_config``.
+        config = self.filter_config or getattr(filterset_class, "advanced_config", None)
+        advanced_filter_helper(filterset, config=config, request=self.request)
+        # Localize the dropdown *option* labels (status/method/… -> Arabic/English).
+        translate_choice_fields(filterset.form, self.request)
         return filterset
 
     def get_add_modal_url(self):
         opts = self.model._meta
-        return reverse("modal_manager", args=[opts.app_label, opts.object_name, "new"])
+        # Form-only modal (show_table=False) — see config.urls scoped_modal_manager.
+        return reverse("scoped_modal_manager", args=[opts.app_label, opts.object_name, "new"])
+
+    def get_modal_base_url(self):
+        """Template URL with a ``__pk__`` placeholder the row-action JS swaps for
+        a record id to open its form-only edit/view modal."""
+        opts = self.model._meta
+        return reverse("scoped_modal_manager", args=[opts.app_label, opts.object_name, "__pk__"])
+
+    def get_modal_delete_url(self):
+        opts = self.model._meta
+        return reverse("scoped_modal_delete", args=[opts.app_label, opts.object_name, "__pk__"])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -88,6 +111,9 @@ class ScopedListView(LoginRequiredMixin, PermissionRequiredMixin, SingleTableMix
                 "add_modal_url": self.get_add_modal_url() if can_add else None,
                 "add_label": strings.get("ui_add", "Add"),
                 "model_verbose_name": opts.verbose_name,
+                # Consumed by scoped_crud.js to open form-only edit/view/delete modals.
+                "modal_base_url": self.get_modal_base_url(),
+                "modal_delete_url": self.get_modal_delete_url(),
             }
         )
         return context

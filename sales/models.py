@@ -291,10 +291,28 @@ class Payment(ScopedModel):
         return t(f"method_{self.method}", self.get_method_display())
 
     def save(self, *args, **kwargs):
+        # Track a prior deposit link so a reassigned payment recomputes both batches.
+        prev_deposit_id = None
+        if self.pk:
+            prev_deposit_id = (
+                type(self).all_objects.filter(pk=self.pk)
+                .values_list("deposit_id", flat=True).first()
+            )
         super().save(*args, **kwargs)
         self.invoice.recalc_payments()
+        self._recalc_linked_deposits(prev_deposit_id)
 
     def delete(self, *args, **kwargs):
         invoice = self.invoice
+        deposit = self.deposit
         super().delete(*args, **kwargs)
         invoice.recalc_payments()
+        if deposit is not None:
+            deposit.recalc_amount()
+
+    def _recalc_linked_deposits(self, prev_deposit_id=None):
+        from finance.models import CashDeposit
+
+        ids = {i for i in (self.deposit_id, prev_deposit_id) if i}
+        for deposit in CashDeposit.objects.filter(pk__in=ids):
+            deposit.recalc_amount()

@@ -36,10 +36,11 @@ language, theme). Health endpoint: `/health/`.
    enter `cost_usd` + `markup_percent` (or a direct `price_usd`); add a *Stock In*
    movement to set initial quantity.
 4. Create staff users and add them to **Sales Staff** (`seed_roles` made the group).
-5. **Sales → New Invoice**: pick a customer or type a walk-in name, add product /
-   service lines (prices auto-fill), Save Draft → **Issue** → record payments.
-   **Print / Export** produces a clean printable invoice (Save as PDF from the
-   browser dialog).
+5. **Sales → New Invoice**: type or pick a customer in the single search box —
+   existing customers autofill phone/address, and a new name is saved as a
+   customer for next time. Add product / service lines (prices auto-fill), Save
+   Draft → **Issue** → record payments. **Print / Export** produces a clean
+   printable invoice (Save as PDF from the browser dialog).
 
 ## Key URLs
 
@@ -54,22 +55,42 @@ language, theme). Health endpoint: `/health/`.
 | `/finance/deposits/` | Cash deposits |
 | `/sales/report/` | Sales report (XLSX export from here; owner-only) |
 
+## Scheduled tasks (Celery Beat)
+
+The `celery` service runs both a worker and Beat (see `compose.yml`). Scheduled
+jobs are declared in `config/celery.py` under `app.conf.beat_schedule`:
+
+| Task | Schedule | Purpose |
+|------|----------|---------|
+| `finance.tasks.refresh_market_rates` | every 3h | Scrapes two USD→LYD reference rates and caches them (**no expiry** — replaced only by a later successful scrape): the **official** rate from [cbl.gov.ly](https://cbl.gov.ly/currency-exchange-rates/) (`finance:cbl_official_usd_rate`) and the **black-market** rate + trend from [eanlibya.com](https://www.eanlibya.com/exchangerate/) (`finance:ean_black_market_usd_rate`). |
+
+The **dashboard** shows both reference rates next to the in-house *custom* rate.
+Each scrape is server-side (the CSP `connect-src` blocks a browser cross-origin
+fetch) and independent — if one site is down its last cached value is kept while
+the other still updates. This is display-only — invoices always freeze the custom
+`ExchangeRate`, never a scraped rate.
+
+**Networking**: `web` and the rest of the stack sit on the isolated
+`switch_pos_internal` network (`internal: true`, no egress). The scrape therefore
+runs in the **celery** service, which is additionally attached to the egress bridge
+`switch_pos_net`; the web tier reads the scraped rates **cache-only** from Redis
+(it never makes an outbound call). A `worker_ready` signal warms the cache on
+celery boot so values appear without waiting for the first 3-hourly Beat run.
+Applying the network change needs a recreate (`./start.sh -d`), not just a restart.
+
 ## CI / Docker image
 
-`.github/workflows/docker-publish.yml` builds the `Dockerfile` and pushes
-`debeski/sales:latest` (and `debeski/sales:<git-sha>`) to Docker Hub on push to
-`main`/`master` or via manual **Run workflow**.
+Two workflows (tag-driven model — full details in [RELEASING.md](RELEASING.md)):
 
-Required repository **Secrets** (Settings → Secrets and variables → Actions → *Secrets* tab):
+- **`.github/workflows/ci.yml`** — on push/PR to `main`: Django checks + tests
+  (`config.settings_dev_sqlite`) and a Docker build + runtime smoke test (no push).
+- **`.github/workflows/release.yml`** — on a `v*` tag: verifies `tag == VERSION`,
+  smoke-tests, pushes multi-arch `debeski/sales:<ver>` + `:latest`, and creates a
+  GitHub Release from the `CHANGELOG.md` section.
 
-| Secret | Value |
-|--------|-------|
-| `DOCKERHUB_USERNAME` | Docker Hub username (`debeski`) |
-| `DOCKERHUB_TOKEN` | Docker Hub access token (Read/Write scope) |
-
-> The token must be a **Secret**, not a *Variable* — Variables are printed in build logs.
-> To deploy the published image instead of building locally, set `WEB_IMAGE=debeski/sales:latest`
-> for `compose.yml` (the prod compose already reads `${WEB_IMAGE:-switch_pos:latest}`).
+Required repository **Secrets**: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (token must
+be a *Secret*, not a *Variable*). Deploy the published image with
+`WEB_IMAGE=debeski/sales:latest ./start.sh -d`.
 
 Set **System Settings → Home URL** to `/sales/dashboard/` to make the dashboard the landing page.
 

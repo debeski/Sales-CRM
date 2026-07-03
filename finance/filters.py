@@ -7,6 +7,12 @@ from .models import CashDeposit, ExchangeRate
 class ExchangeRateFilter(django_filters.FilterSet):
     keyword = django_filters.CharFilter(method="filter_keyword", label="")
 
+    advanced_config = {
+        "fields": [{"name": "keyword", "placeholder_key": "search_placeholder"}],
+        "advanced_fields": [["source"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
     class Meta:
         model = ExchangeRate
         fields = ["keyword", "source"]
@@ -19,6 +25,15 @@ class ExchangeRateFilter(django_filters.FilterSet):
 
 class CashDepositFilter(django_filters.FilterSet):
     keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [
+            {"name": "keyword", "placeholder_key": "search_placeholder"},
+            "method",
+        ],
+        "advanced_fields": [["status"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
 
     class Meta:
         model = CashDeposit

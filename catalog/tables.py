@@ -29,7 +29,7 @@ class ProductTable(DluxTable):
 
     class Meta(DluxTable.Meta):
         model = Product
-        fields = ("name", "sku", "category", "unit", "stock_qty", "price_lyd", "is_active")
+        fields = ("name", "sku", "barcode", "category", "unit", "stock_qty", "price_lyd", "is_active")
         dlux_actions = True
 
     def render_price_lyd(self, record):
@@ -40,7 +40,8 @@ class ProductTable(DluxTable):
 
     def render_stock_qty(self, record):
         if not record.track_stock:
-            return format_html('<span class="text-muted">—</span>')
+            # Django 6.0's format_html requires a placeholder arg; pass the dash.
+            return format_html('<span class="text-muted">{}</span>', "—")
         if record.is_low_stock:
             return format_html('<span class="text-danger fw-semibold">{}</span>', f"{record.stock_qty:g}")
         return f"{record.stock_qty:g}"

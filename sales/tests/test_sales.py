@@ -146,3 +146,139 @@ class PricingAndInvoiceTests(TestCase):
         inv.refresh_from_db(); self.product.refresh_from_db()
         self.assertEqual(inv.status, Invoice.STATUS_CANCELLED)
         self.assertEqual(self.product.stock_qty, Decimal("5.00"))
+
+
+class CustomerComboboxSyncTests(TestCase):
+    """_InvoiceEditorView._sync_customer binds/creates the Customer for the typed
+    name and persists contact info so it autofills on re-entry."""
+
+    def _sync(self, **kwargs):
+        from sales.views import InvoiceCreateView
+        inv = Invoice(exchange_rate=Decimal("6.50"), **kwargs)
+        InvoiceCreateView()._sync_customer(inv)
+        return inv
+
+    def test_new_name_creates_and_persists_customer(self):
+        from sales.models import Customer
+        inv = self._sync(customer_name="New Buyer", customer_phone="0910", customer_address="Old City")
+        self.assertIsNotNone(inv.customer_id)
+        cust = Customer.objects.get(name="New Buyer")
+        self.assertEqual((cust.phone, cust.address), ("0910", "Old City"))
+
+    def test_existing_name_reused_and_backfills_snapshot(self):
+        from sales.models import Customer
+        existing = Customer.objects.create(name="Acme", phone="0999")
+        inv = self._sync(customer_name="acme", customer_phone="", customer_address="")
+        self.assertEqual(inv.customer_id, existing.pk)  # matched case-insensitively
+        self.assertEqual(inv.customer_phone, "0999")  # snapshot backfilled from record
+        self.assertEqual(Customer.objects.filter(name__iexact="acme").count(), 1)  # no duplicate
+
+    def test_unnamed_walk_in_creates_no_customer(self):
+        from sales.models import Customer
+        inv = self._sync(customer_name="")
+        self.assertIsNone(inv.customer_id)
+        self.assertEqual(Customer.objects.count(), 0)
+
+
+class PaymentFormTests(TestCase):
+    def test_quick_pay_validates_without_paid_at(self):
+        # The inline quick-pay form submits only amount/method/deposit; paid_at
+        # must not be required (it defaults to now on save).
+        from sales.forms import PaymentForm
+
+        form = PaymentForm({"amount": "50", "method": "cash", "deposit": ""})
+        self.assertTrue(form.is_valid(), form.errors)
+
+        inv = Invoice.objects.create(customer_name="X", status=Invoice.STATUS_ISSUED)
+        payment = form.save(commit=False)
+        payment.invoice = inv
+        payment.save()
+        self.assertIsNotNone(payment.paid_at)  # model default applied
+        inv.refresh_from_db()
+        self.assertEqual(inv.amount_paid, Decimal("50.00"))
+
+
+class DepositBatchTests(TestCase):
+    def setUp(self):
+        ExchangeRate.objects.create(rate=Decimal("6.50"))
+        self.inv = Invoice.objects.create(
+            customer_name="X", status=Invoice.STATUS_ISSUED, total_lyd=Decimal("1000")
+        )
+
+    def test_deposit_amount_autosums_linked_payments(self):
+        from finance.models import CashDeposit
+
+        dep = CashDeposit.objects.create(reference="B", amount=Decimal("0.00"))
+        Payment.objects.create(invoice=self.inv, amount=Decimal("320"), deposit=dep)
+        dep.refresh_from_db()
+        self.assertEqual(dep.amount, Decimal("320.00"))
+
+        Payment.objects.create(invoice=self.inv, amount=Decimal("100"), deposit=dep)
+        dep.refresh_from_db()
+        self.assertEqual(dep.amount, Decimal("420.00"))  # grows
+
+        dep.payments.order_by("-pk").first().delete()
+        dep.refresh_from_db()
+        self.assertEqual(dep.amount, Decimal("320.00"))  # shrinks
+
+    def test_reassigning_a_payment_recomputes_both_batches(self):
+        from finance.models import CashDeposit
+
+        a = CashDeposit.objects.create(reference="A", amount=Decimal("0.00"))
+        b = CashDeposit.objects.create(reference="B", amount=Decimal("0.00"))
+        p = Payment.objects.create(invoice=self.inv, amount=Decimal("200"), deposit=a)
+        a.refresh_from_db(); self.assertEqual(a.amount, Decimal("200.00"))
+
+        p.deposit = b
+        p.save()
+        a.refresh_from_db(); b.refresh_from_db()
+        self.assertEqual(a.amount, Decimal("0.00"))    # old batch emptied
+        self.assertEqual(b.amount, Decimal("200.00"))  # new batch carries it
+
+    def test_sync_deposit_creates_then_reuses_by_reference(self):
+        from django.test import RequestFactory
+        from django.contrib.auth import get_user_model
+        from finance.models import CashDeposit
+        from sales.views import PaymentCreateView
+
+        req = RequestFactory().post("/")
+        req.user = get_user_model().objects.create(username="u1")
+        view = PaymentCreateView()
+
+        p1 = Payment(invoice=self.inv, amount=Decimal("50"), method="cash")
+        view._sync_deposit(req, p1, "Shift-1")
+        self.assertIsNotNone(p1.deposit_id)
+        self.assertEqual(p1.deposit.reference, "Shift-1")
+
+        p2 = Payment(invoice=self.inv, amount=Decimal("10"), method="cash")
+        view._sync_deposit(req, p2, "shift-1")  # case-insensitive match
+        self.assertEqual(p2.deposit_id, p1.deposit_id)
+        self.assertEqual(CashDeposit.objects.filter(reference__iexact="shift-1").count(), 1)
+
+        p3 = Payment(invoice=self.inv, amount=Decimal("10"), method="cash")
+        view._sync_deposit(req, p3, "")  # blank -> no batch
+        self.assertIsNone(p3.deposit_id)
+
+
+class SeedDemoCommandTests(TestCase):
+    def test_seed_demo_spread_idempotent_and_reset(self):
+        from django.core.management import call_command
+        from catalog.models import Product
+
+        call_command("seed_demo", verbosity=0)
+        self.assertTrue(Product.objects.filter(barcode="6291041500213").exists())
+        for status in ("paid", "partial", "issued", "cancelled", "draft"):
+            self.assertTrue(
+                Invoice.objects.filter(status=status).exists(),
+                f"expected a {status} invoice",
+            )
+        self.assertTrue(Payment.objects.exists())
+
+        # Re-running does not pile up duplicate invoices.
+        count = Invoice.objects.count()
+        call_command("seed_demo", verbosity=0)
+        self.assertEqual(Invoice.objects.count(), count)
+
+        # --reset wipes then rebuilds to the same shape.
+        call_command("seed_demo", "--reset", verbosity=0)
+        self.assertEqual(Invoice.objects.count(), count)

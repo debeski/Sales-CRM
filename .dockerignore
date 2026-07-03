@@ -16,6 +16,7 @@ docker-compose.yml
 .git/
 .gitignore
 .gitattributes
+.github/
 
 # Ignore app directories
 logs/
@@ -35,6 +36,8 @@ build/
 .xpose/
 .claude/
 .codex
+tests/
+docs/
 
 # Ignore celery-related files
 celerybeat-*

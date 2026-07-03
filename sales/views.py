@@ -16,9 +16,14 @@ from django.views.generic import DetailView, TemplateView
 
 from dlux.utils import log_user_action
 
-from common.views import ScopedListView
+from common.views import ScopedListView, scope_filtered_queryset
 from finance.models import CashDeposit, ExchangeRate
-from finance.services import get_current_rate, has_configured_rate
+from finance.services import (
+    get_cbl_official_rate,
+    get_current_rate,
+    get_ean_black_market_rate,
+    has_configured_rate,
+)
 
 from .filters import CustomerFilter, InvoiceFilter, PaymentFilter
 from .forms import CustomerForm, InvoiceForm, InvoiceItemFormSet, PaymentForm
@@ -110,17 +115,51 @@ class _InvoiceEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
             "has_rate": has_configured_rate(),
             "is_edit": invoice is not None,
             "price_map_json": self._price_map(rate),
+            # Feeds the customer combobox <datalist> + JS autofill of phone/address.
+            "customers": Customer.objects.filter(is_active=True).order_by("name"),
         }
+
+    def _sync_customer(self, invoice):
+        """Bind the invoice to a Customer record for the typed/selected name, and
+        persist any new phone/address so future invoices autofill from it.
+
+        - Known customer picked (FK set): fill blank snapshot fields from it, and
+          backfill the customer's own blank phone/address from what was typed.
+        - New name typed (no FK): reuse an existing same-name customer if one
+          exists, else create one — so every customer entered is saved for reuse.
+        """
+        name = (invoice.customer_name or "").strip()
+        customer = invoice.customer if invoice.customer_id else None
+        if customer is None and name:
+            customer = Customer.objects.filter(name__iexact=name).first()
+            if customer is None:
+                customer = Customer(name=name)
+        if customer is None:
+            return  # true walk-in with no name at all
+
+        # Snapshot onto the invoice (walk-in fields win if already provided).
+        invoice.customer_name = invoice.customer_name or customer.name
+        invoice.customer_phone = invoice.customer_phone or customer.phone
+        invoice.customer_address = invoice.customer_address or customer.address
+
+        # Backfill the durable customer record without clobbering existing values.
+        dirty = customer.pk is None
+        if not customer.name and name:
+            customer.name, dirty = name, True
+        if invoice.customer_phone and not customer.phone:
+            customer.phone, dirty = invoice.customer_phone, True
+        if invoice.customer_address and not customer.address:
+            customer.address, dirty = invoice.customer_address, True
+        if dirty:
+            customer.save()
+        invoice.customer = customer
 
     def _save(self, request, form, formset, invoice=None):
         with transaction.atomic():
             invoice = form.save(commit=False)
             if invoice.exchange_rate is None:
                 invoice.exchange_rate = get_current_rate()
-            if invoice.customer_id and not invoice.customer_name:
-                invoice.customer_name = invoice.customer.name
-                invoice.customer_phone = invoice.customer_phone or invoice.customer.phone
-                invoice.customer_address = invoice.customer_address or invoice.customer.address
+            self._sync_customer(invoice)
             invoice.save()
             formset.instance = invoice
             items = formset.save(commit=False)
@@ -198,6 +237,11 @@ class InvoiceDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView)
         ctx["items"] = invoice.items.all()
         ctx["payments"] = invoice.payments.all()
         ctx["payment_form"] = PaymentForm()
+        # Feeds the deposit combobox <datalist> (search-and-add batches by reference).
+        ctx["cash_deposits"] = scope_filtered_queryset(
+            CashDeposit.objects.exclude(reference="").order_by("-deposited_at"),
+            self.request.user,
+        )
         return ctx
 
 
@@ -261,12 +305,36 @@ class PaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, View):
         if form.is_valid():
             payment = form.save(commit=False)
             payment.invoice = invoice
-            payment.save()  # recalc_payments runs in Payment.save()
+            self._sync_deposit(request, payment, form.cleaned_data.get("deposit_ref"))
+            payment.save()  # recalc_payments + deposit recalc run in Payment.save()
             log_user_action(request, "PAYMENT", instance=invoice)
             messages.success(request, _("Payment recorded."))
         else:
             messages.error(request, _("Could not record payment. Check the amount."))
         return redirect("sales:invoice_detail", pk=pk)
+
+    def _sync_deposit(self, request, payment, reference):
+        """Bind the payment to a CashDeposit batch for the typed reference.
+
+        A matched batch (hidden FK already set by JS) is used as-is; a new
+        reference creates a pending batch so cash collected on the fly is grouped
+        without pre-creating the deposit. The batch amount is auto-summed from its
+        payments in ``CashDeposit.recalc_amount`` (triggered by ``Payment.save``).
+        """
+        if payment.deposit_id:
+            return  # existing batch picked from the datalist
+        reference = (reference or "").strip()
+        if not reference:
+            payment.deposit = None
+            return
+        qs = scope_filtered_queryset(CashDeposit.objects.all(), request.user)
+        deposit = qs.filter(reference__iexact=reference).first()
+        if deposit is None:
+            # amount starts at 0 (NOT NULL) and is set to the batch total by
+            # CashDeposit.recalc_amount() the moment payment.save() runs below.
+            deposit = CashDeposit(reference=reference, method=payment.method, amount=Decimal("0.00"))
+            deposit.save()  # scope / created_by come from the request (ScopedModel)
+        payment.deposit = deposit
 
 
 # --------------------------------------------------------------------------- #
@@ -287,6 +355,25 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ctx["current_rate"] = get_current_rate()
         ctx["has_rate"] = has_configured_rate()
         ctx["latest_rate_row"] = ExchangeRate.objects.order_by("-created_at").first()
+        # External reference rates (scraped, cached) shown next to our custom rate:
+        # the official CBL rate and the eanlibya black-market rate. Read cache-only
+        # here — the web tier is network-isolated; the celery worker (which has
+        # egress) does the scraping and populates the shared Redis cache.
+        cbl = get_cbl_official_rate(refresh_if_missing=False)
+        ctx["cbl_official"] = cbl
+        if cbl and cbl.get("average"):
+            ctx["cbl_official_rate"] = Decimal(str(cbl["average"]))
+
+        ean = get_ean_black_market_rate(refresh_if_missing=False)
+        ctx["ean_market"] = ean
+        if ean and ean.get("rate"):
+            market = Decimal(str(ean["rate"]))
+            ctx["ean_market_rate"] = market
+            # Custom pricing tracks the black market, so the meaningful gap is
+            # custom vs black-market; fall back to the official rate if EAN is down.
+            ctx["rate_gap"] = ctx["current_rate"] - market
+        elif ctx.get("cbl_official_rate"):
+            ctx["rate_gap"] = ctx["current_rate"] - ctx["cbl_official_rate"]
         ctx["sales_today"] = today_qs.aggregate(t=Sum("total_lyd"))["t"] or Decimal("0")
         ctx["count_today"] = today_qs.count()
         ctx["sales_month"] = month_qs.aggregate(t=Sum("total_lyd"))["t"] or Decimal("0")

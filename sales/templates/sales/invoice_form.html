@@ -21,7 +21,15 @@
 
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_customer_details }}</div>
-            <div class="card-body">{{ form|crispy }}</div>
+            <div class="card-body">
+                {{ form|crispy }}
+                {# Suggestions for the customer combobox (one search-and-add field). #}
+                <datalist id="customer-datalist">
+                    {% for c in customers %}
+                    <option value="{{ c.name }}" data-id="{{ c.pk }}" data-phone="{{ c.phone }}" data-address="{{ c.address }}"></option>
+                    {% endfor %}
+                </datalist>
+            </div>
         </div>
 
         <div class="card border-0 shadow-sm mb-4">
@@ -187,6 +195,47 @@
 
     body.querySelectorAll('.line-row').forEach(wireRow);
     recalcAll();
+})();
+</script>
+<script>
+// Customer combobox: match the typed/selected name against the datalist, set the
+// hidden customer FK, and autofill phone/address from the saved customer record.
+(function () {
+    const nameInput = document.querySelector('[data-customer-input]');
+    if (!nameInput) return;
+    const hiddenFk = document.getElementById('id_customer');
+    const phone = document.getElementById('id_customer_phone');
+    const address = document.getElementById('id_customer_address');
+    const options = Array.from(document.querySelectorAll('#customer-datalist option'));
+
+    function matchOption(value) {
+        const v = (value || '').trim().toLowerCase();
+        return options.find((o) => o.value.trim().toLowerCase() === v) || null;
+    }
+    // Fill only empty or previously auto-filled fields, so manual entries survive.
+    function setAuto(el, val) {
+        if (!el) return;
+        if (el.value && el.dataset.autofilled !== '1') return;
+        el.value = val || '';
+        el.dataset.autofilled = '1';
+    }
+    function sync() {
+        const opt = matchOption(nameInput.value);
+        if (opt) {
+            if (hiddenFk) hiddenFk.value = opt.dataset.id || '';
+            setAuto(phone, opt.dataset.phone);
+            setAuto(address, opt.dataset.address);
+        } else if (hiddenFk) {
+            hiddenFk.value = '';  // a new name → a new customer is created on save
+        }
+    }
+    [phone, address].forEach((el) => {
+        if (el) el.addEventListener('input', () => {
+            if (document.activeElement === el) el.dataset.autofilled = '';
+        });
+    });
+    nameInput.addEventListener('input', sync);
+    nameInput.addEventListener('change', sync);
 })();
 </script>
 {% endblock %}

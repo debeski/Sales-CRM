@@ -1,12 +1,29 @@
 # Development override for compose.yml
 # Usage: docker compose -f compose.yml -f compose.dev.yml up
 
-name: switch_pos
+name: sales-crm
 
 services:
   smtp-relay:
     build: .
     image: !reset null
+
+  dlux-updater:
+    build: .
+    image: !reset null
+    volumes: !override
+      - /Users/debeski/Desktop/depy/pkg-django-lux/dlux:/app/dlux:ro
+      - ./catalog:/app/catalog:rw
+      - ./common:/app/common:rw
+      - ./config:/app/config:rw
+      - ./finance:/app/finance:rw
+      - ./sales:/app/sales:rw
+      - dlux_runtime:/opt/dlux-runtime:rw
+      - static:/app/staticfiles:rw
+      - ./media/:/app/media/:rw
+      - ./logs/:/app/logs:rw
+    environment:
+      DLUX_BAKED_VERSION: "1.3.0"
 
   nginx:
     ports: !override
@@ -18,10 +35,16 @@ services:
     build: .
     image: !reset null
     volumes: !override
-      - ./:/app:rw
+      - /Users/debeski/Desktop/depy/pkg-django-lux/dlux:/app/dlux:ro
+      - ./catalog:/app/catalog:rw
+      - ./common:/app/common:rw
+      - ./config:/app/config:rw
+      - ./finance:/app/finance:rw
+      - ./sales:/app/sales:rw
       - static:/app/staticfiles:rw
       - ./media/:/app/media/:rw
       - ./logs/:/app/logs:rw
+      - dlux_runtime:/opt/dlux-runtime:ro
       - ./imports/:/app/imports:ro
     environment:
       BASE_URL: "http://localhost:90"
@@ -32,7 +55,13 @@ services:
     build: .
     image: !reset null
     volumes: !override
-      - ./:/app:rw
+      - /Users/debeski/Desktop/depy/pkg-django-lux/dlux:/app/dlux:ro
+      - ./catalog:/app/catalog:rw
+      - ./common:/app/common:rw
+      - ./config:/app/config:rw
+      - ./finance:/app/finance:rw
+      - ./sales:/app/sales:rw
       - static:/app/staticfiles:rw
       - ./media/:/app/media/:rw
       - ./logs/:/app/logs:rw
+      - dlux_runtime:/opt/dlux-runtime:ro

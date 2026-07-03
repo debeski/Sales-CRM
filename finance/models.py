@@ -135,6 +135,19 @@ class CashDeposit(ScopedModel):
     def __str__(self):
         return f"{self.amount} LYD ({self.get_status_display()})"
 
+    def recalc_amount(self, commit=True):
+        """Batch total = sum of the invoice Payments linked to this deposit.
+
+        Called from ``Payment.save()/delete()`` so a deposit that acts as a
+        payment batch always reflects the cash it carries. Standalone deposits
+        (no linked payments) keep their manually-entered amount — this is never
+        called for them.
+        """
+        total = self.payments.aggregate(t=models.Sum("amount"))["t"] or Decimal("0.00")
+        self.amount = total
+        if commit:
+            self.save(update_fields=["amount", "updated_at"])
+
     def confirm(self, actor):
         self.status = self.STATUS_CONFIRMED
         self.confirmed_by = actor

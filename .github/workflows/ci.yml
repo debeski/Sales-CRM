@@ -1,0 +1,55 @@
+name: CI
+
+# Green-checkmark gate on every push/PR to main: run Django's system checks and
+# test suite against a throwaway SQLite config (no Postgres/Redis needed), and
+# verify the Docker image still builds and boots. Releases run independently
+# through release.yml on version tags.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  IMAGE: debeski/sales
+
+permissions:
+  contents: read
+
+jobs:
+  django:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Django system check
+        run: python manage.py check --settings=config.settings_dev_sqlite
+
+      - name: Run tests
+        run: python manage.py test finance catalog sales --settings=config.settings_dev_sqlite
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (load for testing)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE }}:ci-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Runtime smoke tests
+        run: ./scripts/smoke-test.sh ${{ env.IMAGE }}:ci-test

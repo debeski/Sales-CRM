@@ -7,6 +7,12 @@ from .models import Category, Product, Service, StockMovement
 class CategoryFilter(django_filters.FilterSet):
     keyword = django_filters.CharFilter(method="filter_keyword", label="")
 
+    advanced_config = {
+        "fields": [{"name": "keyword", "placeholder_key": "search_placeholder"}],
+        "advanced_fields": [["is_active"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
     class Meta:
         model = Category
         fields = ["keyword", "is_active"]
@@ -19,6 +25,15 @@ class CategoryFilter(django_filters.FilterSet):
 
 class ProductFilter(django_filters.FilterSet):
     keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [
+            {"name": "keyword", "placeholder_key": "search_placeholder"},
+            "category",
+        ],
+        "advanced_fields": [["unit", "is_active"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
 
     class Meta:
         model = Product
@@ -35,6 +50,15 @@ class ProductFilter(django_filters.FilterSet):
 class ServiceFilter(django_filters.FilterSet):
     keyword = django_filters.CharFilter(method="filter_keyword", label="")
 
+    advanced_config = {
+        "fields": [
+            {"name": "keyword", "placeholder_key": "search_placeholder"},
+            "service_type",
+        ],
+        "advanced_fields": [["is_active"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
     class Meta:
         model = Service
         fields = ["keyword", "service_type", "is_active"]
@@ -47,6 +71,15 @@ class ServiceFilter(django_filters.FilterSet):
 
 class StockMovementFilter(django_filters.FilterSet):
     keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [
+            {"name": "keyword", "placeholder_key": "search_placeholder"},
+            "product",
+        ],
+        "advanced_fields": [["movement_type"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
 
     class Meta:
         model = StockMovement
