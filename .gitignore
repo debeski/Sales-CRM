@@ -33,3 +33,4 @@ celerybeat-*
 .key
 # Local dev DB (settings_dev_sqlite)
 *.sqlite3
+Caddyfile

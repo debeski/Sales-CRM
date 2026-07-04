@@ -12,8 +12,61 @@ docker compose --env-file .secrets/.env -f compose.yml -f compose.dev.yml up
 
 `./start.sh -d` runs the `debeski/composer` image, which decrypts `.secrets`,
 builds the `web`/`celery`/`smtp-relay` images from the `Dockerfile`, starts the
-stack (db, redis, nginx, web, celery, smtp-relay, pgadmin, db-backup) and runs the
+stack (db, redis, caddy, web, celery, smtp-relay, pgadmin, db-backup) and runs the
 `migrator` post-start task. In DEV mode the app is served at **http://localhost:90**.
+
+## Production deploy with a domain + automatic HTTPS
+
+The edge is a **Caddy** reverse proxy (`Caddyfile`, `caddy` service). Caddy
+obtains and renews Let's Encrypt certificates automatically on boot — there is
+no certbot step, no bootstrap command, and no manual reload. A plain
+`./start.sh` is the entire TLS workflow.
+
+Caddy serves **two independent sites, routed by hostname** (this is an edge
+concern, not a Django one — Django never sees the apex/www requests):
+
+| Hostname(s)                              | Served by            | Env var             |
+|------------------------------------------|----------------------|---------------------|
+| `erp.switchlibya.ly`                     | the Django ERP (proxy to `web:8000`) | `CADDY_ERP_ADDRESS` |
+| `switchlibya.ly` `www.switchlibya.ly`    | static portfolio (`./portfolio`, mounted read-only at `/srv/portfolio`) | `CADDY_SITE_ADDRESS` |
+
+Each hostname gets its **own** auto-provisioned Let's Encrypt cert. The ERP stays
+entirely on the `erp.` subdomain; `CSRF_COOKIE_DOMAIN`/`SESSION_COOKIE_DOMAIN`
+follow `BASE_URL`'s hostname, so ERP cookies are scoped to `erp.switchlibya.ly`.
+
+1. Point **A/AAAA records** at the VPS public IP for **all three** names:
+   `erp` (the ERP), `@`/apex, and `www` (the portfolio). Open **inbound TCP 80
+   and 443** on the host firewall — Caddy needs both for the ACME challenge and
+   to serve traffic. (A name that doesn't resolve yet just fails its own cert and
+   retries; it does not affect the other site.)
+2. In `.secrets/.env` set:
+   ```ini
+   CADDY_ERP_ADDRESS=erp.switchlibya.ly                    # the ERP subdomain
+   CADDY_SITE_ADDRESS=switchlibya.ly www.switchlibya.ly    # portfolio host(s)
+   ALLOWED_HOSTS=erp.switchlibya.ly,web,localhost,127.0.0.1
+   ALLOWED_URLS=https://erp.switchlibya.ly
+   BASE_URL=https://erp.switchlibya.ly
+   ```
+   > **Migrating from a single-domain deploy:** the ERP host variable changed
+   > from `NGINX_SERVER_NAME` to **`CADDY_ERP_ADDRESS`**. Update your `.env` or
+   > the ERP block falls back to `localhost` and won't get its cert.
+
+   No ACME email is required — Caddy issues and auto-renews certs without one. To
+   receive Let's Encrypt expiry notices, add a real address to the `Caddyfile`
+   global block (`{ email you@your-domain.tld }`); the domain must contain a dot.
+3. Bring the stack up in production (no `-d`):
+   ```bash
+   ./start.sh
+   ```
+   On first boot Caddy issues a cert per hostname (watch `docker compose logs
+   caddy`); each site is live on HTTPS with HTTP→HTTPS redirect. Certs persist in
+   the `caddy_data` volume and auto-renew.
+
+Edit the public landing at **`./portfolio/index.html`** (a self-contained static
+page — no rebuild needed; `docker compose restart caddy` picks up changes, or
+they serve immediately since the dir is mounted). Override the published ports
+with `HTTP_PORT` / `HTTPS_PORT` (default `80`/`443`) and the upload cap with
+`CADDY_MAX_SIZE` (default `10MB`) if needed.
 
 Then migrate, seed roles, and create the owner:
 

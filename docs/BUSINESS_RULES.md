@@ -15,10 +15,20 @@ Decided with the owner. For each `Product`:
 
 1. Cost is stored in USD (`cost_usd`). A `markup_percent` (or an explicit
    `price_usd`) yields the **USD selling price** (`effective_price_usd`).
+   `Product.save()` **persists** this derived `price_usd` when only cost + markup
+   were entered, so the stored record (and its detail view) never shows 0.
 2. The **LYD selling price** is derived live: `effective_price_usd × current_rate`.
    Change the rate once and every product's LYD price updates everywhere.
 3. Any item may set a manual **`price_lyd_override`** — a fixed LYD price that
    bypasses conversion (for odd / unrelated goods Switch occasionally resells).
+   Left blank, the item sells at the live rate (the default).
+
+The create/edit form keeps these fields in step as you type (`catalog/js/price_sync.js`):
+editing markup recomputes the USD price, editing the USD price recomputes the markup,
+editing cost recomputes the USD price (markup held), and the live LYD price is shown
+as the manual-LYD field's **placeholder**. Typing a value into that field turns it into
+a real fixed override (and back-fills USD + markup to match). The detail view adds a
+computed **"Selling Price (LYD)"** row (via `get_modal_context`) so it matches the list.
 
 `Service` items follow the same override logic and may also be **"per job"**
 (no fixed price — entered on the invoice).

@@ -3,7 +3,7 @@
 ## Part 1: Project Related
 
 ### Current Verified Snapshot:
-Django POS on django-lux 1.2.14. Apps: finance, catalog, sales, common. USD-base pricing → LYD via global ExchangeRate. Postgres/Redis/Celery(+beat via `-B`) via compose. v0.1.2 in progress (untagged). Migrations clean; 15 tests pass.
+Django POS/ERP on django-lux 1.2.14. Apps: finance, catalog, sales, common. USD-base pricing → LYD via global ExchangeRate. Postgres/Redis/Celery(+beat via `-B`) via compose. Edge = Caddy w/ automatic HTTPS, per-hostname: erp.switchlibya.ly → ERP; apex+www → static ./portfolio. v0.1.3 in progress (untagged); v0.1.2 tagged+published. Migrations clean; 29 tests pass.
 
 ### Current Project Adopted Standards:
 - Scoped models via dlux ScopedModel; list pages via common.ScopedListView + dlux modal_manager.
@@ -26,6 +26,9 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [ ] Optional: inject per-list Add button into the filter bar (config "buttons") vs current separate top-right button.
   - [ ] Browser smoke-test modal edit/delete (row actions) — combobox verified via test client.
 - **Completed Recently:**
+  - [x] (v0.1.3) Edge split by hostname (Caddy): `(erp_app)` snippet imported by `{$CADDY_ERP_ADDRESS}` (ERP, erp.subdomain) + new `{$CADDY_SITE_ADDRESS}` block file_servers `./portfolio` (apex+www static landing). BREAKING .env: `NGINX_SERVER_NAME`→`CADDY_ERP_ADDRESS`; `CADDY_SITE_ADDRESS`=portfolio host(s). Defaults keep dev (`:80` catch-all, portfolio→http://portfolio.localhost no-ACME). `BASE_URL`/`ALLOWED_URLS`=https://erp.switchlibya.ly, `ALLOWED_HOSTS`+=erp. New `portfolio/index.html` (self-contained responsive landing). Needs DNS A records for @/www (only erp existed). `caddy validate`+`docker compose config` pass. OPERATIONS.md rewritten.
+  - [x] (v0.1.3) Catalog price consistency: `Product.save()` persists derived `price_usd` (detail no longer shows 0.0); `catalog/js/price_sync.js` live-syncs cost/markup/USD/LYD in the modal (loaded via new `ScopedListView.extra_scripts`); LYD stays LIVE (override blank unless typed — shown as placeholder). Detail gets computed "Selling Price (LYD)" row via `get_modal_context` + project override of `dlux/helpers/dynamic_modal_detail.html`. `get_{unit,service_type,movement_type}_display` overridden → translated choice in detail. New `common.forms.translate_help_text` (help_<model>_<field> keys) called from all ModelForms; added catalog/finance help_* + `label_*_selling_price_lyd` AR/EN keys. +4 tests.
+  - [x] (v0.1.3) SSL/edge: replaced nginx+certbot with a `caddy` service + `Caddyfile` (automatic Let's Encrypt HTTPS, zero one-off commands — fits composer `./start.sh`). Old nginx deadlocked (443 needed certs that didn't exist yet → port 80 ACME never served). Ported all nginx rules (static cache, media + dlux_backups 404, pgadmin subpath, maintenance-flag 503, health). New `caddy_data`/`caddy_config` volumes; fixed `${NGINX_PORT:-443}` port-collision bug (→ `HTTP_PORT`/`HTTPS_PORT`). dev override → caddy on :80/host 90. `caddy validate` passed. Old template → `.xpose/`. CHANGELOG v0.1.3 + VERSION 0.1.3 + OPERATIONS.md deploy section. Live-deploy fix: dropped the ACME `email` directive — the `webmaster@localhost` default made LE reject issuance (`invalidContact`), and an empty `email`/`tls` value won't parse; Caddy auto-renews without a contact (notices opt-in via `{ email … }`).
   - [x] Fix sidebar: moved invoice_list /sales/ -> /sales/invoices/ (+ /sales/ redirect to dashboard) so dlux prefix-match doesn't highlight Invoices on every sales page.
   - [x] Payment deposit = search-and-add combobox (find-or-create batch by reference); deposit amount auto-sums linked payments (recalc on Payment save/delete); CashDepositForm locks amount when it has payments. Optional. 27 tests. Product decision: deposits stay optional (mixed cash flow); NO customer-accounts for now (per-invoice).
   - [x] perm_<codename> AR/EN keys (catalog/finance/sales) so group-manager permission labels translate the model name (dlux only localizes the verb). Model headers already translated. Verified: 0 English AR perm labels.
@@ -40,10 +43,10 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [x] CHANGELOG v0.1.2 + VERSION bump + docs/OPERATIONS update.
 
 ### One-line info about last verified Tests:
-17 tests pass (config.settings_dev_sqlite); incl. finance CBL + EAN scraper tests; system check clean.
+29 tests pass (config.settings_dev_sqlite); +catalog pricing-consistency & help-text tests; detail modal verified live via test client (LYD row, AR unit علبة, USD 130,00); system check clean.
 
 ### One-line info about last time edited Docs:
-docs/OPERATIONS.md — added Celery Beat/CBL-rate section + combobox note (v0.1.2).
+docs/BUSINESS_RULES.md — pricing model section: persisted price_usd, form price-sync, live-LYD placeholder, computed detail LYD row (v0.1.3).
 
 ## Part 2: Global
 

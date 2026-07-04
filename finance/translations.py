@@ -9,6 +9,7 @@ DLUX_STRINGS = {
         "label_exchangerate_note": "Note",
         "label_exchangerate_created_by": "Set By",
         "label_exchangerate_created_at": "Date",
+        "help_exchangerate_rate": "How many Libyan Dinars equal one US Dollar.",
         # Cash deposit
         "label_cashdeposit_amount": "Amount (LYD)",
         "label_cashdeposit_method": "Method",
@@ -40,6 +41,7 @@ DLUX_STRINGS = {
         "label_exchangerate_note": "ملاحظة",
         "label_exchangerate_created_by": "أدخله",
         "label_exchangerate_created_at": "التاريخ",
+        "help_exchangerate_rate": "كم ديناراً ليبياً يساوي دولاراً أمريكياً واحداً.",
         # Cash deposit
         "label_cashdeposit_amount": "المبلغ (دينار)",
         "label_cashdeposit_method": "طريقة الدفع",

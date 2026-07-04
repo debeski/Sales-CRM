@@ -24,6 +24,13 @@ DLUX_STRINGS = {
         "label_product_stock_qty": "Stock",
         "label_product_reorder_level": "Reorder Level",
         "label_product_is_active": "Active",
+        # Product — computed detail row (see Product.get_modal_context)
+        "label_product_selling_price_lyd": "Selling Price (LYD)",
+        # Product — field help text
+        "help_product_sku": "Leave blank to auto-generate.",
+        "help_product_markup_percent": "Profit added on top of the import cost. Changing it recalculates the USD selling price.",
+        "help_product_price_usd": "Auto-filled from cost + markup; edit it directly and the markup follows.",
+        "help_product_price_lyd_override": "Leave blank to sell at the live rate; enter a value to fix the LYD price for this item.",
         # Service
         "label_service_name": "Name",
         "label_service_service_type": "Service Type",
@@ -31,6 +38,9 @@ DLUX_STRINGS = {
         "label_service_price_usd": "Price (USD)",
         "label_service_price_lyd_override": "Manual LYD Price",
         "label_service_is_active": "Active",
+        "label_service_selling_price_lyd": "Selling Price (LYD)",
+        # Stock movement — field help text
+        "help_stockmovement_quantity": "A positive amount for Stock In / Stock Out; a signed (+/-) amount for an Adjustment.",
         # Stock movement
         "label_stockmovement_product": "Product",
         "label_stockmovement_movement_type": "Type",
@@ -80,6 +90,13 @@ DLUX_STRINGS = {
         "label_product_stock_qty": "المخزون",
         "label_product_reorder_level": "حد إعادة الطلب",
         "label_product_is_active": "نشط",
+        # Product — computed detail row (see Product.get_modal_context)
+        "label_product_selling_price_lyd": "سعر البيع (دينار)",
+        # Product — field help text
+        "help_product_sku": "اتركه فارغاً ليُولَّد تلقائياً.",
+        "help_product_markup_percent": "الربح المضاف فوق تكلفة الاستيراد. تغييره يُعيد حساب سعر البيع بالدولار.",
+        "help_product_price_usd": "يُملأ تلقائياً من التكلفة + الربح؛ عدّله مباشرةً وتتبعه نسبة الربح.",
+        "help_product_price_lyd_override": "اتركه فارغاً للبيع بسعر الصرف الحيّ؛ أدخل قيمة لتثبيت السعر بالدينار لهذا الصنف.",
         # Service
         "label_service_name": "الاسم",
         "label_service_service_type": "نوع الخدمة",
@@ -87,6 +104,9 @@ DLUX_STRINGS = {
         "label_service_price_usd": "السعر (دولار)",
         "label_service_price_lyd_override": "سعر ثابت بالدينار",
         "label_service_is_active": "نشط",
+        "label_service_selling_price_lyd": "سعر البيع (دينار)",
+        # Stock movement — field help text
+        "help_stockmovement_quantity": "قيمة موجبة للإدخال/الإخراج؛ قيمة بإشارة (+/-) للتسوية.",
         # Stock movement
         "label_stockmovement_product": "الصنف",
         "label_stockmovement_movement_type": "النوع",

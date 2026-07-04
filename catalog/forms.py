@@ -2,9 +2,17 @@ from django import forms
 
 from dlux.utils import set_field_attrs
 
-from common.forms import translate_choice_fields
+from common.forms import translate_choice_fields, translate_help_text
+from finance.services import get_current_rate
 
 from .models import Category, Product, Service, StockMovement
+
+
+def _tag_lyd_field(form, field_name):
+    """Expose the live USD→LYD rate on a widget so the price-sync JS can preview
+    the LYD selling price as the user types (see catalog/js/price_sync.js)."""
+    if field_name in form.fields:
+        form.fields[field_name].widget.attrs["data-usd-rate"] = str(get_current_rate())
 
 
 class CategoryForm(forms.ModelForm):
@@ -18,6 +26,7 @@ class CategoryForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         set_field_attrs(self)
+        translate_help_text(self)
 
 
 class ProductForm(forms.ModelForm):
@@ -36,9 +45,18 @@ class ProductForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["sku"].required = False
-        self.fields["sku"].help_text = "Leave blank to auto-generate."
+        # Data hooks the price-sync JS keys off (see catalog/js/price_sync.js).
+        self.fields["cost_usd"].widget.attrs["data-price-cost"] = "1"
+        self.fields["markup_percent"].widget.attrs["data-price-markup"] = "1"
+        self.fields["price_usd"].widget.attrs["data-price-usd"] = "1"
+        self.fields["price_lyd_override"].widget.attrs["data-price-lyd"] = "1"
+        _tag_lyd_field(self, "price_lyd_override")
         set_field_attrs(self)
         translate_choice_fields(self)
+        translate_help_text(self)
+        # set_field_attrs seeds a placeholder from the label; the JS repurposes the
+        # LYD field's placeholder to show the live derived price, so clear it here.
+        self.fields["price_lyd_override"].widget.attrs.pop("placeholder", None)
 
 
 class ServiceForm(forms.ModelForm):
@@ -50,8 +68,13 @@ class ServiceForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["price_usd"].widget.attrs["data-price-usd"] = "1"
+        self.fields["price_lyd_override"].widget.attrs["data-price-lyd"] = "1"
+        _tag_lyd_field(self, "price_lyd_override")
         set_field_attrs(self)
         translate_choice_fields(self)
+        translate_help_text(self)
+        self.fields["price_lyd_override"].widget.attrs.pop("placeholder", None)
 
 
 class StockMovementForm(forms.ModelForm):
@@ -65,3 +88,4 @@ class StockMovementForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         set_field_attrs(self)
         translate_choice_fields(self)
+        translate_help_text(self)

@@ -1,10 +1,10 @@
-name: sales-crm
+name: sales
 
 x-environment:
   # Database settings
   &de
-  WEB_IMAGE: "${WEB_IMAGE:-sales-crm:latest}"
-  POSTGRES_DB: "sales_crm_db"
+  WEB_IMAGE: "${WEB_IMAGE:-debeski/sales:latest}"
+  POSTGRES_DB: "sales_db"
   POSTGRES_PORT: "5432"
   POSTGRES_HOST: "db"
   # Redis / Celery
@@ -14,9 +14,11 @@ x-environment:
   # Backup settings
   BACKUP_INTERVAL: "${BACKUP_INTERVAL:-680400}"
   # Web app settings (override these in compose.dev.yml or .env)
-  ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,nginx,localhost,127.0.0.1}"
-  ALLOWED_URLS: "${ALLOWED_URLS:-http://localhost:90}"
-  BASE_URL: "${BASE_URL:-http://localhost}"
+  # The ERP is served on the erp.<domain> subdomain (Caddy routes by hostname);
+  # the apex/www hosts are the static portfolio and never reach Django.
+  ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,localhost,127.0.0.1,erp.switchlibya.ly,caddy}"
+  ALLOWED_URLS: "${ALLOWED_URLS:-https://erp.switchlibya.ly}"
+  BASE_URL: "${BASE_URL:-https://erp.switchlibya.ly}"
   DEBUG_STATUS: "${DEBUG_STATUS:-False}"
   # DjangoLux verified inline updater (generated Compose deployments only)
   DLUX_INLINE_UPDATES_ENABLED: "True"
@@ -46,7 +48,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - sales-crm_internal
+      - sales_internal
 
   redis:
     image: redis:7
@@ -60,10 +62,10 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - sales-crm_internal
+      - sales_internal
 
   smtp-relay:
-    image: ${WEB_IMAGE:-sales-crm:latest}
+    image: ${WEB_IMAGE:-debeski/sales:latest}
     restart: always
     entrypoint: []
     command: ["python", "-m", "tools.smtp_relay"]
@@ -87,12 +89,12 @@ services:
       retries: 3
       start_period: 5s
     networks:
-      - sales-crm_net
-      - sales-crm_internal
+      - sales_net
+      - sales_internal
 
   # DjangoLux updater start
   dlux-updater:
-    image: ${WEB_IMAGE:-sales-crm:latest}
+    image: ${WEB_IMAGE:-debeski/sales:latest}
     restart: always
     command: ["python", "-m", "tools.dlux_runtime_supervisor", "--no-watch", "--", "bash", "-c", "python manage.py migrator && exec python manage.py dlux_update_worker"]
     entrypoint: ["/app/entrypoint.sh"]
@@ -119,45 +121,50 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - sales-crm_internal
+      - sales_internal
       - dlux_update_egress
   # DjangoLux updater end
 
-  nginx:
-    image: nginx:latest
-    ports:
-      - target: 80
-        published: "${NGINX_PORT:-80}"
-        protocol: tcp
+  caddy:
+    image: caddy:latest
     restart: always
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     environment:
-      NGINX_SERVER_NAME: ${NGINX_SERVER_NAME:-localhost}
-      NGINX_MAX_SIZE: ${NGINX_MAX_SIZE:-10M}
-      # Restrict envsubst to NGINX_*-prefixed vars only, so nginx's own runtime
-      # variables (host, remote_addr, scheme, ...) survive template rendering.
-      NGINX_ENVSUBST_FILTER: "NGINX_"
+      # ERP (Django) hostname — Caddy auto-provisions its Let's Encrypt cert.
+      # NOTE: replaces the old single NGINX_SERVER_NAME var. e.g. erp.switchlibya.ly
+      CADDY_ERP_ADDRESS: "${CADDY_ERP_ADDRESS:-localhost}"
+      # Public portfolio host(s), space-separated (apex + www), served statically.
+      # e.g. "switchlibya.ly www.switchlibya.ly"
+      CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-http://portfolio.localhost}"
+      # Max upload size (Caddy units, e.g. 10MB).
+      CADDY_MAX_SIZE: "${CADDY_MAX_SIZE:-10MB}"
     volumes:
-      - ./.nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # certs + ACME account — MUST persist across restarts
+      - caddy_config:/config
       - static:/app/staticfiles:ro
       - ./media/:/app/media:ro
       - dlux_runtime:/opt/dlux-runtime:ro
-      - ./.nginx/maintenance.html:/usr/share/nginx/html/dlux-maintenance.html:ro
+      - ./.nginx/maintenance.html:/usr/share/caddy/maintenance/maintenance.html:ro
+      - ./portfolio:/srv/portfolio:ro   # static public landing (apex + www)
     depends_on:
       web:
         condition: service_healthy
         restart: true
     healthcheck:
-      test: ["CMD-SHELL", "nginx -t || exit 1"]
+      test: ["CMD", "caddy", "validate", "--adapter", "caddyfile", "--config", "/etc/caddy/Caddyfile"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
     networks:
-      - sales-crm_net
-      - sales-crm_internal
+      - sales_net
+      - sales_internal
 
   web:
-    image: ${WEB_IMAGE:-sales-crm:latest}
+    image: ${WEB_IMAGE:-debeski/sales:latest}
     restart: always
     command: >
       python -m tools.dlux_runtime_supervisor -- bash -c ' if [ "$$DEBUG_STATUS" = "True" ]; then
@@ -196,10 +203,10 @@ services:
       dlux-updater:
         condition: service_healthy
     networks:
-      - sales-crm_internal
+      - sales_internal
 
   celery:
-    image: ${WEB_IMAGE:-sales-crm:latest}
+    image: ${WEB_IMAGE:-debeski/sales:latest}
     restart: always
     command: ["python", "-m", "tools.dlux_runtime_supervisor", "--", "python", "-m", "celery", "-A", "config", "worker", "-B", "--loglevel=info"]
     entrypoint: ["/app/entrypoint.sh"]
@@ -228,11 +235,11 @@ services:
       dlux-updater:
         condition: service_healthy
     networks:
-      - sales-crm_internal
+      - sales_internal
       # Public egress so the periodic rate-scrape task (finance.tasks.refresh_market_rates)
       # can reach cbl.gov.ly / eanlibya.com. web stays internal-only and reads the
       # scraped rates from the shared Redis cache.
-      - sales-crm_net
+      - sales_net
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -251,7 +258,7 @@ services:
       db:
         condition: service_healthy
     networks:
-      - sales-crm_internal
+      - sales_internal
 
   db-backup:
     image: postgres:17
@@ -292,7 +299,7 @@ services:
       db:
         condition: service_healthy
     networks:
-      - sales-crm_internal
+      - sales_internal
 
 volumes:
   postgres_data:
@@ -300,11 +307,13 @@ volumes:
   pgadmin_data:
   static:
   dlux_runtime:
+  caddy_data:
+  caddy_config:
 
 networks:
-  sales-crm_net:
+  sales_net:
     driver: bridge
-  sales-crm_internal:
+  sales_internal:
     internal: true
   dlux_update_egress:
     driver: bridge

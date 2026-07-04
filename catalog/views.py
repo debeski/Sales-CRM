@@ -20,6 +20,8 @@ class ProductListView(ScopedListView):
     filterset_class = ProductFilter
     page_title_key = "page_products"
     page_subtitle_key = "page_products_sub"
+    # Live sync of the cost/markup/USD/LYD price fields in the create-edit modal.
+    extra_scripts = ("catalog/js/price_sync.js",)
 
 
 class ServiceListView(ScopedListView):
@@ -29,6 +31,7 @@ class ServiceListView(ScopedListView):
     filterset_class = ServiceFilter
     page_title_key = "page_services"
     page_subtitle_key = "page_services_sub"
+    extra_scripts = ("catalog/js/price_sync.js",)
 
 
 class StockMovementListView(ScopedListView):

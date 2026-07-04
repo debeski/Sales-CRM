@@ -25,11 +25,16 @@ services:
     environment:
       DLUX_BAKED_VERSION: "1.3.0"
 
-  nginx:
+  caddy:
+    # Local dev: plain HTTP only (no ACME/TLS), served on host port 90.
+    # The ERP is the catch-all on :80; the portfolio keeps its localhost default
+    # (never ACMEs, never collides with the :80 catch-all).
     ports: !override
       - target: 80
         published: "90"
         protocol: tcp
+    environment:
+      CADDY_ERP_ADDRESS: ":80"
 
   web:
     build: .

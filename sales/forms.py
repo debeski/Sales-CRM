@@ -4,7 +4,7 @@ from django.forms import inlineformset_factory
 from dlux.translations import get_strings
 from dlux.utils import set_field_attrs
 
-from common.forms import translate_choice_fields
+from common.forms import translate_choice_fields, translate_help_text
 
 from .models import Customer, Invoice, InvoiceItem, Payment
 
@@ -20,6 +20,7 @@ class CustomerForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         set_field_attrs(self)
+        translate_help_text(self)
 
 
 class InvoiceForm(forms.ModelForm):
@@ -51,6 +52,7 @@ class InvoiceForm(forms.ModelForm):
             "data-customer-input": "1",
         })
         set_field_attrs(self)
+        translate_help_text(self)
 
 
 class InvoiceItemForm(forms.ModelForm):
@@ -64,6 +66,7 @@ class InvoiceItemForm(forms.ModelForm):
         self.fields["unit_price_lyd"].required = False
         self.fields["description"].required = False
         set_field_attrs(self, inline_labels=True)
+        translate_help_text(self)
 
 
 # Inline formset that powers the multi-line invoice editor.
@@ -106,3 +109,4 @@ class PaymentForm(forms.ModelForm):
         })
         set_field_attrs(self)
         translate_choice_fields(self)
+        translate_help_text(self)

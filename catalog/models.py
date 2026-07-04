@@ -77,17 +77,17 @@ class Product(ScopedModel):
     markup_percent = models.DecimalField(
         max_digits=6, decimal_places=2, default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Markup %",
-        help_text="Used to derive the USD selling price when one isn't entered directly.",
+        help_text="Profit added on top of the import cost. Changing it recalculates the USD selling price.",
     )
     price_usd = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Selling Price (USD)",
-        help_text="Leave at 0 to auto-derive from cost + markup.",
+        help_text="Auto-filled from cost + markup; edit it directly and the markup follows.",
     )
     price_lyd_override = models.DecimalField(
         max_digits=14, decimal_places=2, null=True, blank=True,
         validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Manual LYD Price",
-        help_text="Set a fixed LYD price for this item; bypasses USD conversion.",
+        help_text="Leave blank to sell at the live rate; enter a value to fix the LYD price for this item.",
     )
 
     # --- Stock ---
@@ -111,11 +111,25 @@ class Product(ScopedModel):
         return f"{self.name} ({self.sku})" if self.sku else self.name
 
     def save(self, *args, **kwargs):
+        # Persist the derived USD selling price so detail views and every
+        # downstream read see a real number instead of 0 when the user only
+        # entered cost + markup (the form JS normally fills this, but this keeps
+        # the record consistent even for API/import/no-JS saves).
+        if not self.price_usd or self.price_usd <= 0:
+            derived = self.effective_price_usd
+            if derived and derived > 0:
+                self.price_usd = derived
         super().save(*args, **kwargs)
         if not self.sku:
             # SKU needs the pk, so assign on the next pass without re-running audit.
             self.sku = f"P{self.pk:05d}"
             super().save(update_fields=["sku"])
+
+    def get_unit_display(self):
+        """Translated unit label (dlux's generic detail view calls this directly,
+        and Django's auto version would return the untranslated English choice)."""
+        from common.i18n import t
+        return t(f"unit_{self.unit}", dict(self.UNIT_CHOICES).get(self.unit, self.unit))
 
     @property
     def effective_price_usd(self):
@@ -130,6 +144,21 @@ class Product(ScopedModel):
         if self.price_lyd_override is not None:
             return self.price_lyd_override
         return usd_to_lyd(self.effective_price_usd, rate)
+
+    def get_modal_context(self):
+        """Extra rows for the dlux generic detail view. Surfaces the *effective*
+        LYD selling price (live-converted unless a manual override is set) so the
+        detail card matches the product list, whose price column is also derived."""
+        from common.i18n import t
+        price = self.selling_price_lyd()
+        return {
+            "extra_detail_fields": [
+                {
+                    "label": t("label_product_selling_price_lyd", "Selling Price (LYD)"),
+                    "value": f"{price:,.2f}" if price is not None else "—",
+                }
+            ]
+        }
 
     @property
     def is_low_stock(self):
@@ -176,6 +205,11 @@ class Service(ScopedModel):
     def __str__(self):
         return self.name
 
+    def get_service_type_display(self):
+        """Translated service-type label (dlux's generic detail view calls this)."""
+        from common.i18n import t
+        return t(f"svctype_{self.service_type}", dict(self.TYPE_CHOICES).get(self.service_type, self.service_type))
+
     def selling_price_lyd(self, rate=None):
         """Override wins; else convert USD; else ``None`` meaning "quote per job"."""
         if self.price_lyd_override is not None:
@@ -183,6 +217,20 @@ class Service(ScopedModel):
         if self.price_usd is not None:
             return usd_to_lyd(self.price_usd, rate)
         return None
+
+    def get_modal_context(self):
+        """Effective LYD selling price for the dlux generic detail view (or the
+        "Per job" marker when the service is quoted per job)."""
+        from common.i18n import t
+        price = self.selling_price_lyd()
+        return {
+            "extra_detail_fields": [
+                {
+                    "label": t("label_service_selling_price_lyd", "Selling Price (LYD)"),
+                    "value": f"{price:,.2f}" if price is not None else t("ui_per_job", "Per job"),
+                }
+            ]
+        }
 
 
 class StockMovement(ScopedModel):
@@ -209,7 +257,7 @@ class StockMovement(ScopedModel):
     )
     quantity = models.DecimalField(
         max_digits=12, decimal_places=2, verbose_name="Quantity",
-        help_text="Positive magnitude for In/Out; signed delta for Adjustment.",
+        help_text="A positive amount for Stock In / Stock Out; a signed (+/-) amount for an Adjustment.",
     )
     reason = models.CharField(max_length=200, blank=True, verbose_name="Reason")
     reference = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="Reference")
@@ -222,6 +270,11 @@ class StockMovement(ScopedModel):
 
     def __str__(self):
         return f"{self.get_movement_type_display()} {self.quantity} × {self.product_id}"
+
+    def get_movement_type_display(self):
+        """Translated movement-type label (dlux's generic detail view calls this)."""
+        from common.i18n import t
+        return t(f"mtype_{self.movement_type}", dict(self.TYPE_CHOICES).get(self.movement_type, self.movement_type))
 
     @property
     def signed_quantity(self):

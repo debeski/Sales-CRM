@@ -3,7 +3,7 @@ from django import forms
 from dlux.translations import get_strings
 from dlux.utils import set_field_attrs
 
-from common.forms import translate_choice_fields
+from common.forms import translate_choice_fields, translate_help_text
 
 from .models import CashDeposit, ExchangeRate
 
@@ -20,6 +20,7 @@ class ExchangeRateForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         set_field_attrs(self)
         translate_choice_fields(self)
+        translate_help_text(self)
 
 
 class CashDepositForm(forms.ModelForm):
@@ -42,3 +43,6 @@ class CashDepositForm(forms.ModelForm):
             )
         set_field_attrs(self)
         translate_choice_fields(self)
+        # Runs after the auto-sum note above; there is no help_cashdeposit_amount
+        # key, so that per-instance note is preserved.
+        translate_help_text(self)

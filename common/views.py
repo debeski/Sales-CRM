@@ -54,6 +54,10 @@ class ScopedListView(LoginRequiredMixin, PermissionRequiredMixin, SingleTableMix
     allow_add = True
     #: optional advanced_filter_helper config (see dlux.utils.advanced_filter_helper)
     filter_config = None
+    #: static paths (relative to STATIC_URL) appended to the page's scripts block —
+    #: e.g. per-model modal-form enhancers. Loaded on the list page so they are
+    #: present when its create/edit modal opens.
+    extra_scripts = ()
 
     def get_queryset(self):
         qs = self.model._default_manager.all()
@@ -114,6 +118,7 @@ class ScopedListView(LoginRequiredMixin, PermissionRequiredMixin, SingleTableMix
                 # Consumed by scoped_crud.js to open form-only edit/view/delete modals.
                 "modal_base_url": self.get_modal_base_url(),
                 "modal_delete_url": self.get_modal_delete_url(),
+                "extra_scripts": list(self.extra_scripts),
             }
         )
         return context
