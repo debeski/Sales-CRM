@@ -32,6 +32,9 @@ Add two repository **Secrets** (Settings → Secrets and variables → Actions �
 The `Release` workflow then:
 
 - verifies `tag == VERSION`,
+- resolves the baked DjangoLux version from the pinned `django-lux[updater]==` in
+  `requirements.txt` and passes it as `--build-arg DLUX_BAKED_VERSION` (stamped as
+  `LABEL org.switchlibya.dlux_baked_version` — the composer-updater version gate),
 - runs `scripts/smoke-test.sh` against a freshly built image (boots the app and
   applies all migrations on SQLite — gates the push on a working image),
 - builds `linux/amd64` + `linux/arm64` with Buildx,

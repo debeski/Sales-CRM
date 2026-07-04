@@ -8,7 +8,8 @@ from pathlib import Path
 import logging
 from urllib.parse import urlparse
 from csp.constants import SELF, UNSAFE_EVAL, UNSAFE_INLINE
-from dlux.utils import get_secret, dlux_settings
+from dlux.utils import get_secret
+from dlux.utils import dlux_settings  # noqa: separate line so dlux_setup's literal substring check sees it and stops re-appending its block
 
 
 WSGI_APPLICATION = "config.wsgi.application"

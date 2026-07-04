@@ -48,7 +48,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - sales_internal
+      - internal
 
   redis:
     image: redis:7
@@ -62,7 +62,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - sales_internal
+      - internal
 
   smtp-relay:
     image: ${WEB_IMAGE:-debeski/sales:latest}
@@ -89,8 +89,8 @@ services:
       retries: 3
       start_period: 5s
     networks:
-      - sales_net
-      - sales_internal
+      - egress
+      - internal
 
   # DjangoLux updater start
   dlux-updater:
@@ -121,8 +121,8 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - sales_internal
-      - dlux_update_egress
+      - internal
+      - egress
   # DjangoLux updater end
 
   caddy:
@@ -160,8 +160,8 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - sales_net
-      - sales_internal
+      - frontend
+      - internal
 
   web:
     image: ${WEB_IMAGE:-debeski/sales:latest}
@@ -203,7 +203,7 @@ services:
       dlux-updater:
         condition: service_healthy
     networks:
-      - sales_internal
+      - internal
 
   celery:
     image: ${WEB_IMAGE:-debeski/sales:latest}
@@ -235,11 +235,11 @@ services:
       dlux-updater:
         condition: service_healthy
     networks:
-      - sales_internal
+      - internal
       # Public egress so the periodic rate-scrape task (finance.tasks.refresh_market_rates)
       # can reach cbl.gov.ly / eanlibya.com. web stays internal-only and reads the
       # scraped rates from the shared Redis cache.
-      - sales_net
+      - egress
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -258,7 +258,7 @@ services:
       db:
         condition: service_healthy
     networks:
-      - sales_internal
+      - internal
 
   db-backup:
     image: postgres:17
@@ -299,7 +299,72 @@ services:
       db:
         condition: service_healthy
     networks:
-      - sales_internal
+      - internal
+
+  # Composer-as-updater start
+  # Least-privilege Docker API gateway. composer-updater talks to this instead
+  # of mounting the raw /var/run/docker.sock (which is host root). Only the API
+  # surface Compose needs (containers/images/networks/exec + POST) is enabled.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: always
+    environment:
+      CONTAINERS: 1
+      IMAGES: 1
+      NETWORKS: 1
+      VOLUMES: 1
+      EXEC: 1
+      POST: 1
+      INFO: 1
+      PING: 1
+      VERSION: 1
+      # Everything else stays denied (default 0): BUILD, AUTH, SECRETS, SWARM, …
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker_proxy
+
+  # Resident image-level updater. Watches a trigger file (written by dlux's
+  # update engine) and runs a full `composer -uo` on each request: pull →
+  # version gate (refuse an image older than the active runtime) → recreate →
+  # health → post_start (migrator). Uses the SAME image as this repo builds via
+  # composer; pinned (not :latest) to avoid recreating itself mid-update.
+  #
+  # NOTE: the project must be brought up from its root dir so ${PWD} is the host
+  # project path — composer runs `docker compose` against the host daemon, so it
+  # needs the project mounted at the identical absolute path for bind mounts
+  # (./media, ./logs, …) to resolve correctly (same pattern as composer start.sh).
+  composer-updater:
+    image: debeski/composer:1.1.5
+    restart: unless-stopped
+    working_dir: "${PWD}"
+    command:
+      - watch
+      - --trigger-file
+      - /opt/dlux-runtime/state/image-update-request.json
+      - --status-file
+      - /opt/dlux-runtime/state/deploy-status.json
+      - --interval
+      - "30"
+    environment:
+      DOCKER_HOST: "tcp://docker-socket-proxy:2375"
+      WEB_IMAGE: "${WEB_IMAGE:-debeski/sales:latest}"
+      # Version gate: compare the pulled image's baked DjangoLux label against
+      # the deployment's active runtime version (dlux active.json).
+      COMPOSER_VERSION_LABEL: "org.switchlibya.dlux_baked_version"
+      COMPOSER_ACTIVE_VERSION_FILE: "/opt/dlux-runtime/state/active.json"
+      COMPOSER_ACTIVE_VERSION_KEY: "version"
+      COMPOSER_STATUS_FILE: "/opt/dlux-runtime/state/deploy-status.json"
+    volumes:
+      - "${PWD}:${PWD}"
+      - dlux_runtime:/opt/dlux-runtime:rw
+    depends_on:
+      docker-socket-proxy:
+        condition: service_started
+    networks:
+      - egress
+      - docker_proxy
+  # Composer-as-updater end
 
 volumes:
   postgres_data:
@@ -311,9 +376,18 @@ volumes:
   caddy_config:
 
 networks:
-  sales_net:
+  # Published ingress only (caddy). Bridge so the host can reach the app and
+  # Caddy can reach Let's Encrypt (ACME) for automatic HTTPS.
+  frontend:
     driver: bridge
-  sales_internal:
+  # Outbound internet for the narrow set of services that need it: smtp-relay
+  # (→ Gmail), dlux-updater (→ PyPI wheels), celery (→ rate scrapes: cbl.gov.ly /
+  # eanlibya.com), composer-updater (→ Docker Hub).
+  egress:
+    driver: bridge
+  # Inter-service traffic with NO internet access — db, redis, web, celery, …
+  internal:
     internal: true
-  dlux_update_egress:
-    driver: bridge
+  # Isolated path from composer-updater to the docker-socket-proxy only.
+  docker_proxy:
+    internal: true

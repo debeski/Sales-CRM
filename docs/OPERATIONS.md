@@ -124,12 +124,47 @@ the other still updates. This is display-only — invoices always freeze the cus
 `ExchangeRate`, never a scraped rate.
 
 **Networking**: `web` and the rest of the stack sit on the isolated
-`switch_pos_internal` network (`internal: true`, no egress). The scrape therefore
+`internal` network (`internal: true`, no egress). The scrape therefore
 runs in the **celery** service, which is additionally attached to the egress bridge
-`switch_pos_net`; the web tier reads the scraped rates **cache-only** from Redis
+`egress`; the web tier reads the scraped rates **cache-only** from Redis
 (it never makes an outbound call). A `worker_ready` signal warms the cache on
 celery boot so values appear without waiting for the first 3-hourly Beat run.
 Applying the network change needs a recreate (`./start.sh -d`), not just a restart.
+
+The full topology is a **3+1 network model**:
+
+| Network | Type | Members | Purpose |
+| --- | --- | --- | --- |
+| `frontend` | bridge | `caddy` | Published ingress; bridge so the host reaches the app and Caddy reaches Let's Encrypt/ACME. |
+| `egress` | bridge | `smtp-relay`, `dlux-updater`, `celery`, `composer-updater` | The only services with outbound internet (Gmail, PyPI, rate scrapes, Docker Hub). |
+| `internal` | `internal: true` | `db`, `redis`, `web`, `caddy`, `celery`, `pgadmin`, `db-backup` | No-internet inter-service traffic. |
+| `docker_proxy` | `internal: true` | `composer-updater`, `docker-socket-proxy` | Isolated Docker API path (see below). |
+
+## Composer-as-updater (image-level updates)
+
+The stack ships two services that let an operator (or dlux's in-app UI) roll the
+deployment onto a newer published image without any host shell access:
+
+- **`composer-updater`** (`debeski/composer:1.1.5`, `command: watch`) — a resident
+  process that watches `/opt/dlux-runtime/state/image-update-request.json` on the
+  shared `dlux_runtime` volume. On a request it runs `composer -uo` against the
+  host daemon (pull → **version gate** → recreate → health → `post_start` migrator)
+  and writes `deploy-status.json`. It talks to the daemon over TCP via the socket
+  proxy (`DOCKER_HOST=tcp://docker-socket-proxy:2375`), never the raw socket. It is
+  pinned (not `:latest`) so it won't recreate itself mid-update, and mounts the
+  project at its host path (`${PWD}:${PWD}`) — **so the stack must be started from
+  its root directory** for the `./media`/`./logs` bind mounts to resolve.
+- **`docker-socket-proxy`** (tecnativa) — a least-privilege Docker API gateway that
+  mounts `/var/run/docker.sock:ro` and exposes only the surface Compose needs
+  (containers/images/networks/volumes/exec/POST/info/ping/version). Everything else
+  (build, auth, secrets, swarm) stays denied.
+
+**Version gate**: the image is built with `--build-arg DLUX_BAKED_VERSION=<ver>`
+(CI reads the pinned `django-lux[updater]==` from `requirements.txt`) which is
+stamped as `LABEL org.switchlibya.dlux_baked_version`. The updater
+(`COMPOSER_VERSION_LABEL=org.switchlibya.dlux_baked_version`) refuses to recreate
+onto an image whose baked version is older than the deployment's active runtime
+version (`/opt/dlux-runtime/state/active.json`).
 
 ## CI / Docker image
 
