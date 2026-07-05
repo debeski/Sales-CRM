@@ -335,7 +335,7 @@ services:
   # needs the project mounted at the identical absolute path for bind mounts
   # (./media, ./logs, …) to resolve correctly (same pattern as composer start.sh).
   composer-updater:
-    image: debeski/composer:v1.1.6
+    image: debeski/composer:v1.1.7
     restart: unless-stopped
     working_dir: "${PWD}"
     command:
@@ -344,8 +344,11 @@ services:
       - /opt/dlux-runtime/state/image-update-request.json
       - --status-file
       - /opt/dlux-runtime/state/deploy-status.json
+      # Short poll so an update request is picked up fast (keeps the live
+      # progress page from lingering on a stale status). Writes deploy-log.txt
+      # beside the status file for the maintenance page's console.
       - --interval
-      - "30"
+      - "5"
       # Registry availability check → dlux reads image-available.json to offer
       # an "application update" when a newer app image is published.
       - --check-image
