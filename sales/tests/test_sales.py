@@ -152,10 +152,16 @@ class CustomerComboboxSyncTests(TestCase):
     """_InvoiceEditorView._sync_customer binds/creates the Customer for the typed
     name and persists contact info so it autofills on re-entry."""
 
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        # A superuser bypasses row-ownership, so these tests exercise the
+        # bind/create logic itself (not the private-customer filtering).
+        self.actor = get_user_model().objects.create_superuser("comboadmin", "a@a.co", "x")
+
     def _sync(self, **kwargs):
         from sales.views import InvoiceCreateView
         inv = Invoice(exchange_rate=Decimal("6.50"), **kwargs)
-        InvoiceCreateView()._sync_customer(inv)
+        InvoiceCreateView()._sync_customer(inv, self.actor)
         return inv
 
     def test_new_name_creates_and_persists_customer(self):

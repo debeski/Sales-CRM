@@ -79,7 +79,14 @@ class CashDeposit(ScopedModel):
     Technicians and delivery reps record the money they collected; an admin then
     confirms it. Payments on invoices may optionally point at the deposit that
     carried their cash, so the books reconcile.
+
+    Row-level visibility: a staff member sees only the deposits they recorded;
+    an admin holding ``view_all_cashdeposit`` (typically paired with
+    ``confirm_cashdeposit``) sees and reconciles everyone's. See ``common.access``.
     """
+
+    #: Row-ownership lookups consumed by common.access.apply_ownership.
+    OWNER_FIELDS = ("created_by",)
 
     METHOD_CASH = "cash"
     METHOD_BANK = "bank_transfer"
@@ -130,7 +137,10 @@ class CashDeposit(ScopedModel):
         verbose_name = "Cash Deposit"
         verbose_name_plural = "Cash Deposits"
         ordering = ["-deposited_at", "-created_at"]
-        permissions = [("confirm_cashdeposit", "Can confirm or reject cash deposits")]
+        permissions = [
+            ("confirm_cashdeposit", "Can confirm or reject cash deposits"),
+            ("view_all_cashdeposit", "Can view all cash deposits (not just own)"),
+        ]
 
     def __str__(self):
         return f"{self.amount} LYD ({self.get_status_display()})"

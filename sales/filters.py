@@ -1,7 +1,7 @@
 import django_filters
 from django.db.models import Q
 
-from .models import Customer, Invoice, Payment
+from .models import Customer, Delivery, Invoice, Payment
 
 
 class InvoiceFilter(django_filters.FilterSet):
@@ -76,3 +76,30 @@ class PaymentFilter(django_filters.FilterSet):
         if not value:
             return queryset
         return queryset.filter(Q(invoice__number__icontains=value) | Q(notes__icontains=value))
+
+
+class DeliveryFilter(django_filters.FilterSet):
+    keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [
+            {"name": "keyword", "placeholder_key": "search_placeholder"},
+            "status",
+        ],
+        "advanced_fields": [["scheduled_date"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
+    class Meta:
+        model = Delivery
+        fields = ["keyword", "status", "scheduled_date"]
+
+    def filter_keyword(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(recipient__icontains=value)
+            | Q(address__icontains=value)
+            | Q(phone__icontains=value)
+            | Q(invoice__number__icontains=value)
+        )

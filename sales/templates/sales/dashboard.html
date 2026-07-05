@@ -24,9 +24,10 @@
     {% endif %}
 
     <div class="row g-3 mb-4">
+        {% if can_view_sales %}
         <div class="col-sm-6 col-xl-3">
             <div class="card border-0 shadow-sm h-100"><div class="card-body">
-                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_sales_today }}</div>
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_sales_today }}{% if not is_sales_manager %} <i class="bi bi-person-badge text-muted" title="{{ DLUX_STRINGS.label_invoice_salesperson }}"></i>{% endif %}</div>
                 <div class="h4 mb-0">{{ sales_today|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
                 <div class="small text-muted">{{ count_today }} {{ DLUX_STRINGS.ui_invoices_word }}</div>
             </div></div>
@@ -44,6 +45,16 @@
                 <div class="small text-muted">{{ draft_count }} {{ DLUX_STRINGS.ui_drafts }}</div>
             </div></div>
         </div>
+        {% endif %}
+        {% if can_view_deliveries %}
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase"><i class="bi bi-truck me-1"></i>{{ DLUX_STRINGS.page_deliveries }}</div>
+                <div class="h4 mb-0">{{ open_delivery_count }}</div>
+                <div class="small text-muted"><a href="{% url 'sales:delivery_list' %}" class="text-decoration-none">{{ DLUX_STRINGS.ui_view_all }}</a></div>
+            </div></div>
+        </div>
+        {% endif %}
         <div class="col-sm-6 col-xl-3">
             <div class="card border-0 shadow-sm h-100"><div class="card-body">
                 <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_exchange_rate }} <span class="text-muted">(LYD/USD)</span></div>
@@ -79,6 +90,28 @@
     </div>
 
     <div class="row g-4">
+        {% if can_view_deliveries %}
+        <div class="col-lg-5 order-lg-2">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
+                    <span><i class="bi bi-truck me-1"></i>{{ DLUX_STRINGS.page_deliveries }}</span>
+                    <a href="{% url 'sales:delivery_list' %}" class="small text-decoration-none">{{ DLUX_STRINGS.ui_view_all }}</a>
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% for d in open_deliveries %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>{{ d.recipient|default:d.address }}</span>
+                        <span class="badge rounded-pill
+                            {% if d.status == 'delivered' %}bg-success{% elif d.status == 'out' %}bg-warning text-dark{% elif d.status == 'assigned' %}bg-info text-dark{% elif d.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">{{ d.status_label }}</span>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-muted text-center py-4">{{ DLUX_STRINGS.ui_no_deliveries }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+        {% if can_view_sales %}
         <div class="col-lg-7">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
@@ -105,6 +138,8 @@
                 </div>
             </div>
         </div>
+        {% endif %}
+        {% if perms.catalog.view_product %}
         <div class="col-lg-5">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
@@ -130,6 +165,7 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

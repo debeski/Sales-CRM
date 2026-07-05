@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth import get_user_model
 from django.forms import inlineformset_factory
 
 from dlux.translations import get_strings
@@ -6,7 +7,14 @@ from dlux.utils import set_field_attrs
 
 from common.forms import translate_choice_fields, translate_help_text
 
-from .models import Customer, Invoice, InvoiceItem, Payment
+from .models import Customer, Delivery, Invoice, InvoiceItem, Payment
+
+User = get_user_model()
+
+
+def _staff_queryset():
+    """Active users eligible to be picked as a salesperson / courier."""
+    return User.objects.filter(is_active=True).order_by("first_name", "username")
 
 
 class CustomerForm(forms.ModelForm):
@@ -30,6 +38,7 @@ class InvoiceForm(forms.ModelForm):
     class Meta:
         model = Invoice
         fields = [
+            "salesperson",
             "customer", "customer_name", "customer_phone", "customer_address",
             "invoice_date", "discount_percent", "discount_amount", "notes",
         ]
@@ -40,9 +49,18 @@ class InvoiceForm(forms.ModelForm):
             "customer": forms.HiddenInput(),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["customer"].required = False
+        # The salesperson picker is manager-only (assign_salesperson). For a
+        # regular rep the field is dropped entirely — the invoice defaults to
+        # them (Invoice.save / the editor view), so they can't reassign it away.
+        can_assign = user is not None and user.has_perm("sales.assign_salesperson")
+        if can_assign:
+            self.fields["salesperson"].required = False
+            self.fields["salesperson"].queryset = _staff_queryset()
+        else:
+            self.fields.pop("salesperson", None)
         # Single search-and-add combobox: a text input backed by <datalist> of
         # existing customers (rendered in the template). autocomplete is off so
         # the datalist — not the browser history — drives suggestions.
@@ -107,6 +125,35 @@ class PaymentForm(forms.ModelForm):
             "data-deposit-input": "1",
             "placeholder": strings.get("ui_deposit_search", "Search or add a deposit…"),
         })
+        set_field_attrs(self)
+        translate_choice_fields(self)
+        translate_help_text(self)
+
+
+class DeliveryForm(forms.ModelForm):
+    """Dynamic-modal form for the delivery board. The ``assigned_to`` courier
+    picker is dispatcher-only (``assign_delivery``); a courier editing their own
+    job can update the status/notes but not hand it to someone else."""
+
+    refresh_parent = True
+
+    class Meta:
+        model = Delivery
+        fields = [
+            "invoice", "assigned_to", "recipient", "phone", "address",
+            "status", "scheduled_date", "notes",
+        ]
+        widgets = {"scheduled_date": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["invoice"].required = False
+        can_assign = user is not None and user.has_perm("sales.assign_delivery")
+        if can_assign:
+            self.fields["assigned_to"].required = False
+            self.fields["assigned_to"].queryset = _staff_queryset()
+        else:
+            self.fields.pop("assigned_to", None)
         set_field_attrs(self)
         translate_choice_fields(self)
         translate_help_text(self)

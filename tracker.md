@@ -3,12 +3,13 @@
 ## Part 1: Project Related
 
 ### Current Verified Snapshot:
-Django POS/ERP on django-lux 1.2.14. Apps: finance, catalog, sales, common. USD-base pricing → LYD via global ExchangeRate. Postgres/Redis/Celery(+beat via `-B`) via compose. Edge = Caddy w/ automatic HTTPS, per-hostname: erp.switchlibya.ly → ERP; apex+www → static ./portfolio. v0.1.4 in progress (untagged, composer-updater pipeline); v0.1.3 tagged+published. Migrations clean; 29 tests pass. compose config validates (prod+dev).
+Django POS/ERP on django-lux 1.3.2. Apps: finance, catalog, sales, common. USD-base pricing → LYD via global ExchangeRate. Postgres/Redis/Celery(+beat via `-B`) via compose. Edge = Caddy w/ automatic HTTPS, per-hostname: erp.switchlibya.ly → ERP; apex+www → static ./portfolio. v0.2.0 in progress (untagged, per-employee visibility) on branch feat/per-employee-visibility; v0.1.5 tagged+published. Migrations clean; 46 tests pass. compose config validates (prod+dev).
 
 ### Current Project Adopted Standards:
 - Scoped models via dlux ScopedModel; list pages via common.ScopedListView + dlux modal_manager.
 - Money frozen per-invoice (exchange_rate + unit_price_lyd). finance is dependency root.
 - Filters use dlux setup_filter_helper; forms use dlux set_field_attrs.
+- Row-level visibility (v0.2.0): owned models set `OWNER_FIELDS` + `view_all_<model>` perm; `common.access.apply_ownership` at READ choke points only (NOT the manager — keeps child recalcs whole). Roles: superuser / Sales Manager / Sales Representative / Delivery Courier via `seed_roles`.
 
 ### Adopted Standards' rules and policies:
 - Never delete: move to ./.xpose/ preserving path.
@@ -26,6 +27,7 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [ ] Optional: inject per-list Add button into the filter bar (config "buttons") vs current separate top-right button.
   - [ ] Browser smoke-test modal edit/delete (row actions) — combobox verified via test client.
 - **Completed Recently:**
+  - [x] (v0.2.0) Per-employee row-level visibility: new `common/access.py` (`apply_ownership` reads model `OWNER_FIELDS` + `view_all_<model>` perm; superuser/view_all bypass; shared models untouched). Applied at READ choke points (ScopedListView, invoice detail/print/editor/issue/cancel/pay `_visible_invoices`, build_sales_report, private-customer datalist/`_sync_customer`) — NOT the manager (keeps `invoice.payments.all()` recalcs whole). Invoice `salesperson` FK (defaults to creator; manager-only picker via `assign_salesperson`). Owned: Invoice/Customer/Payment/finance.CashDeposit. New `sales.Delivery` model (assigned_to courier, status lifecycle, invoice snapshot) + List/Table/Filter/Form/route/EN-AR strings. Modal-manager hole closed via `install_modal_ownership_patch` wrapping dlux `_scope_filtered_modal_queryset` (installed on first request_started to dodge init-DB warning). Dashboard gated+row-scoped (courier sees deliveries, not sales — fixed prior ungated leak). `seed_roles` → 3 groups (Manager/Rep/Courier). +15 tests (test_visibility.py), 46 pass. Migrations sales/0003 + finance/0002. Docs: PERMISSIONS.md rewritten + BUSINESS_RULES visibility/delivery sections. On branch feat/per-employee-visibility (uncommitted).
   - [x] (v0.1.4) Portfolio toggles: `portfolio/index.html` real theme (data-theme+localStorage sl_theme, pre-paint no-FOUC, tracks OS until chosen) + language (ع/EN, data-i18n dict 50 keys EN/AR, flips lang/dir RTL) switches; removed the lone hard-coded Arabic tagline; polish (scroll-margin, focus rings, reduced-motion). Stays a host bind-mount (not baked) per user. Keys verified 50/50 both langs.
   - [x] (v0.1.4) Composer-updater pipeline (mirror of project-decrees, Caddy-adapted): Dockerfile `ARG DLUX_BAKED_VERSION`+`LABEL org.switchlibya.dlux_baked_version`; release.yml resolves ver from `django-lux[updater]==` in requirements.txt → build-args on both build steps. New services `composer-updater` (debeski/composer:1.1.5 watch) + `docker-socket-proxy` (tecnativa, least-priv). Networks consolidated `sales_net`/`sales_internal`/`dlux_update_egress` → `frontend`/`egress`/`internal`/`docker_proxy` (celery→egress+internal, caddy→frontend+internal). compose.dev: +dlux mount on smtp-relay. settings.py: `dlux_settings` on own import line (noqa). CHANGELOG v0.1.4 + VERSION 0.1.4 + OPERATIONS.md topology+composer section. compose config prod+dev OK.
   - [x] (v0.1.3) Edge split by hostname (Caddy): `(erp_app)` snippet imported by `{$CADDY_ERP_ADDRESS}` (ERP, erp.subdomain) + new `{$CADDY_SITE_ADDRESS}` block file_servers `./portfolio` (apex+www static landing). BREAKING .env: `NGINX_SERVER_NAME`→`CADDY_ERP_ADDRESS`; `CADDY_SITE_ADDRESS`=portfolio host(s). Defaults keep dev (`:80` catch-all, portfolio→http://portfolio.localhost no-ACME). `BASE_URL`/`ALLOWED_URLS`=https://erp.switchlibya.ly, `ALLOWED_HOSTS`+=erp. New `portfolio/index.html` (self-contained responsive landing). Needs DNS A records for @/www (only erp existed). `caddy validate`+`docker compose config` pass. OPERATIONS.md rewritten.
@@ -45,10 +47,10 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [x] CHANGELOG v0.1.2 + VERSION bump + docs/OPERATIONS update.
 
 ### One-line info about last verified Tests:
-29 tests pass (config.settings_dev_sqlite); +catalog pricing-consistency & help-text tests; detail modal verified live via test client (LYD row, AR unit علبة, USD 130,00); system check clean.
+46 tests pass (config.settings_dev_sqlite); +15 test_visibility.py (ownership helper own/assigned/view_all/superuser, list+detail choke points, modal-lookup patch 404, delivery assignee scoping, salesperson default, role-aware dashboard ctx); dashboard.html parses; system check clean.
 
 ### One-line info about last time edited Docs:
-docs/OPERATIONS.md — networking rewritten to 3+1 topology table + new "Composer-as-updater" section (version gate, socket-proxy) (v0.1.4).
+docs/PERMISSIONS.md rewritten (2-layer perms, OWNER_FIELDS table, 3 roles) + BUSINESS_RULES.md visibility/delivery sections (v0.2.0).
 
 ## Part 2: Global
 

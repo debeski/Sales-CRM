@@ -71,4 +71,29 @@ issued/partial/paid ──cancel──▶ cancelled  (stock restored)
 
 Technicians and delivery reps **record** the cash they collected (`pending`); an
 admin **confirms** or **rejects** it. Invoice payments may reference the deposit
-that carried their cash so the books reconcile.
+that carried their cash so the books reconcile. A staffer sees only the deposits
+they recorded; a manager (`view_all_cashdeposit`) sees all.
+
+## Who sees what (per-employee visibility)
+
+The system is multi-user: each record is owned, and staff see only their own work
+unless they hold the matching `view_all_<model>` permission. Full rules in
+[PERMISSIONS.md](PERMISSIONS.md). In business terms:
+
+- A **sales rep** sees only **their own** invoices, customers and payments. Their
+  customer book is private (two reps can each keep a "Mr. Ali" without collision).
+  Their dashboard sales figures and reports cover **only their own sales**.
+- An invoice belongs to its **salesperson** (defaults to whoever created it). Only
+  a **manager** can reassign it to another rep.
+- A **manager** sees and reports on the **whole store**, and assigns work.
+- The **owner** is a superuser and sees everything.
+
+## Deliveries
+
+A **delivery** is a courier job — optionally linked to an invoice, with a
+recipient/address snapshot so it stays intact if the invoice changes. Lifecycle:
+`pending → assigned → out → delivered` (or `failed` / `cancelled`). It
+auto-advances to *assigned* the moment a courier is set, and stamps the delivery
+time on *delivered*. A **courier sees only the jobs assigned to them** and never
+the sales side of the business; a **dispatcher/manager** (`view_all_delivery` +
+`assign_delivery`) sees the whole board and assigns couriers.

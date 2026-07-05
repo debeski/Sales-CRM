@@ -16,6 +16,7 @@ from django_tables2 import SingleTableMixin
 from dlux.translations import get_current_language_code, get_strings
 from dlux.utils import advanced_filter_helper, get_user_scope, is_scope_enabled
 
+from common.access import apply_ownership
 from common.forms import translate_choice_fields
 
 
@@ -64,7 +65,10 @@ class ScopedListView(LoginRequiredMixin, PermissionRequiredMixin, SingleTableMix
         if self.ordering:
             order = [self.ordering] if isinstance(self.ordering, str) else list(self.ordering)
             qs = qs.order_by(*order)
-        return scope_filtered_queryset(qs, self.request.user)
+        qs = scope_filtered_queryset(qs, self.request.user)
+        # Row-level visibility: an employee sees only their own records unless
+        # they hold the model's view_all_<model> permission (see common.access).
+        return apply_ownership(qs, self.request.user)
 
     def get_filterset(self, filterset_class):
         filterset = super().get_filterset(filterset_class)

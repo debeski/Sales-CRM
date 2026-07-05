@@ -1,11 +1,20 @@
 """
 Create the project's permission groups so the owner doesn't have to tick boxes.
 
-  * "Sales Staff" — technicians & delivery reps. They can pull products, create
-    and issue invoices, take payments, and record their cash deposits. They
-    CANNOT touch prices, the exchange rate, the catalog, or confirm deposits.
-  * Admins are expected to be Django superusers (full access). The owner runs
-    everything; this command just wires the limited staff role.
+Row-level visibility (see ``common.access``) means the *same* view permission
+behaves differently per group: a rep with ``view_invoice`` sees only their own
+sales, while a manager who additionally holds ``view_all_invoice`` sees the whole
+store. So the three roles differ mostly by their ``view_all_*`` / ``assign_*``
+grants:
+
+  * "Sales Manager"        — sees & assigns everyone's work, runs reports, manages
+                             the catalog + exchange rate, confirms cash deposits.
+  * "Sales Representative"  — sells: creates/issues invoices, takes payments, keeps
+                             their OWN customer book. No view_all → own data only.
+  * "Delivery Courier"      — sees only deliveries assigned to them and records the
+                             cash they collect. No access to invoices or reports.
+
+Admins are expected to be Django superusers (full access).
 
 Run:  python manage.py seed_roles
 Idempotent — safe to re-run after adding models/permissions.
@@ -13,8 +22,8 @@ Idempotent — safe to re-run after adding models/permissions.
 from django.contrib.auth.models import Group, Permission
 from django.core.management.base import BaseCommand
 
-STAFF_PERMS = [
-    # Sell
+# Sells only their own work (no view_all_* → row-scoped to themselves).
+REP_PERMS = [
     "sales.view_invoice",
     "sales.add_invoice",
     "sales.change_invoice",      # edit own drafts before issuing
@@ -23,19 +32,57 @@ STAFF_PERMS = [
     "sales.add_payment",
     "sales.view_customer",
     "sales.add_customer",
+    "sales.change_customer",
     # Look up what to sell (read-only)
     "catalog.view_product",
     "catalog.view_service",
-    # Hand over cash (record only; an admin confirms)
+    # Hand over the cash they collected (an admin/manager confirms it)
     "finance.view_cashdeposit",
     "finance.add_cashdeposit",
 ]
 
-GROUPS = {"Sales Staff": STAFF_PERMS}
+# Only the deliveries assigned to them (no view_all_delivery). Never sees sales.
+COURIER_PERMS = [
+    "sales.view_delivery",
+    "sales.change_delivery",     # update status of their own jobs
+    "finance.view_cashdeposit",
+    "finance.add_cashdeposit",
+]
+
+# Sees and assigns everyone's work; the view_all_* grants lift row-scoping.
+MANAGER_PERMS = [
+    # Invoices — full lifecycle + cross-rep visibility + reassignment
+    "sales.view_invoice", "sales.add_invoice", "sales.change_invoice",
+    "sales.delete_invoice", "sales.issue_invoice", "sales.cancel_invoice",
+    "sales.view_sales_report", "sales.view_all_invoice", "sales.assign_salesperson",
+    # Customers (all reps' books)
+    "sales.view_customer", "sales.add_customer", "sales.change_customer",
+    "sales.delete_customer", "sales.view_all_customer",
+    # Payments (all)
+    "sales.view_payment", "sales.add_payment", "sales.change_payment",
+    "sales.view_all_payment",
+    # Deliveries — dispatch board
+    "sales.view_delivery", "sales.add_delivery", "sales.change_delivery",
+    "sales.delete_delivery", "sales.view_all_delivery", "sales.assign_delivery",
+    # Catalog + pricing
+    "catalog.view_product", "catalog.add_product", "catalog.change_product",
+    "catalog.view_service", "catalog.add_service", "catalog.change_service",
+    "catalog.view_category", "catalog.add_category", "catalog.change_category",
+    # Finance — rate + cash reconciliation
+    "finance.view_exchangerate", "finance.add_exchangerate", "finance.change_exchangerate",
+    "finance.view_cashdeposit", "finance.add_cashdeposit", "finance.change_cashdeposit",
+    "finance.confirm_cashdeposit", "finance.view_all_cashdeposit",
+]
+
+GROUPS = {
+    "Sales Manager": MANAGER_PERMS,
+    "Sales Representative": REP_PERMS,
+    "Delivery Courier": COURIER_PERMS,
+}
 
 
 class Command(BaseCommand):
-    help = "Create/refresh the Switch POS permission groups."
+    help = "Create/refresh the Switch POS permission groups (Manager / Rep / Courier)."
 
     def handle(self, *args, **options):
         for group_name, perm_codes in GROUPS.items():
@@ -53,4 +100,7 @@ class Command(BaseCommand):
                     self.stderr.write(self.style.WARNING(f"  missing permission: {code}"))
             group.permissions.set(perms)
             self.stdout.write(self.style.SUCCESS(f"{group_name}: {len(perms)} permissions set"))
-        self.stdout.write("Done. Assign staff users to the 'Sales Staff' group; keep the owner as a superuser.")
+        self.stdout.write(
+            "Done. Assign each user to one group; keep the owner as a superuser. "
+            "Reps/couriers see only their own rows — managers hold the view_all_* perms."
+        )

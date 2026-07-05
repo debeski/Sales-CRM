@@ -16,6 +16,7 @@ from django.views.generic import DetailView, TemplateView
 
 from dlux.utils import log_user_action
 
+from common.access import apply_ownership, user_can_view_all
 from common.views import ScopedListView, scope_filtered_queryset
 from finance.models import CashDeposit, ExchangeRate
 from finance.services import (
@@ -25,12 +26,19 @@ from finance.services import (
     has_configured_rate,
 )
 
-from .filters import CustomerFilter, InvoiceFilter, PaymentFilter
+from .filters import CustomerFilter, DeliveryFilter, InvoiceFilter, PaymentFilter
 from .forms import CustomerForm, InvoiceForm, InvoiceItemFormSet, PaymentForm
-from .models import Customer, Invoice, Payment
+from .models import Customer, Delivery, Invoice, Payment
 from .reports import build_sales_report, build_sales_report_xlsx, parse_window
 from .services import cancel_invoice, issue_invoice
-from .tables import CustomerTable, InvoiceTable, PaymentTable
+from .tables import CustomerTable, DeliveryTable, InvoiceTable, PaymentTable
+
+
+def _visible_invoices(user):
+    """Invoices this user is allowed to see/act on (own + assigned, or all for a
+    manager holding ``view_all_invoice``). The single ownership choke point for
+    the full-page invoice flows that bypass ScopedListView."""
+    return apply_ownership(Invoice.objects.all(), user)
 
 
 # --------------------------------------------------------------------------- #
@@ -42,6 +50,14 @@ class CustomerListView(ScopedListView):
     table_class = CustomerTable
     filterset_class = CustomerFilter
     page_title_key = "page_customers"
+
+
+class DeliveryListView(ScopedListView):
+    model = Delivery
+    permission_required = "sales.view_delivery"
+    table_class = DeliveryTable
+    filterset_class = DeliveryFilter
+    page_title_key = "page_deliveries"
 
 
 class PaymentListView(ScopedListView):
@@ -116,10 +132,13 @@ class _InvoiceEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
             "is_edit": invoice is not None,
             "price_map_json": self._price_map(rate),
             # Feeds the customer combobox <datalist> + JS autofill of phone/address.
-            "customers": Customer.objects.filter(is_active=True).order_by("name"),
+            # Customers are private, so a rep only ever sees/binds their own book.
+            "customers": apply_ownership(
+                Customer.objects.filter(is_active=True), self.request.user
+            ).order_by("name"),
         }
 
-    def _sync_customer(self, invoice):
+    def _sync_customer(self, invoice, actor):
         """Bind the invoice to a Customer record for the typed/selected name, and
         persist any new phone/address so future invoices autofill from it.
 
@@ -131,7 +150,13 @@ class _InvoiceEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
         name = (invoice.customer_name or "").strip()
         customer = invoice.customer if invoice.customer_id else None
         if customer is None and name:
-            customer = Customer.objects.filter(name__iexact=name).first()
+            # Match only within the rep's own (private) customer book; a new name
+            # creates a fresh record owned by them.
+            customer = (
+                apply_ownership(Customer.objects.all(), actor)
+                .filter(name__iexact=name)
+                .first()
+            )
             if customer is None:
                 customer = Customer(name=name)
         if customer is None:
@@ -159,7 +184,7 @@ class _InvoiceEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
             invoice = form.save(commit=False)
             if invoice.exchange_rate is None:
                 invoice.exchange_rate = get_current_rate()
-            self._sync_customer(invoice)
+            self._sync_customer(invoice, request.user)
             invoice.save()
             formset.instance = invoice
             items = formset.save(commit=False)
@@ -177,12 +202,12 @@ class InvoiceCreateView(_InvoiceEditorView):
     permission_required = "sales.add_invoice"
 
     def get(self, request):
-        form = InvoiceForm()
+        form = InvoiceForm(user=request.user)
         formset = InvoiceItemFormSet()
         return render(request, self.template_name, self._context(request, form, formset))
 
     def post(self, request):
-        form = InvoiceForm(request.POST)
+        form = InvoiceForm(request.POST, user=request.user)
         formset = InvoiceItemFormSet(request.POST)
         if form.is_valid() and formset.is_valid():
             invoice = self._save(request, form, formset)
@@ -195,15 +220,15 @@ class InvoiceUpdateView(_InvoiceEditorView):
     permission_required = "sales.change_invoice"
 
     def _get_invoice(self, pk):
-        invoice = get_object_or_404(Invoice, pk=pk)
-        return invoice
+        # Ownership-scoped: a rep can only edit their own/assigned invoices.
+        return get_object_or_404(_visible_invoices(self.request.user), pk=pk)
 
     def get(self, request, pk):
         invoice = self._get_invoice(pk)
         if not invoice.is_editable:
             messages.warning(request, _("Only draft invoices can be edited."))
             return redirect("sales:invoice_detail", pk=invoice.pk)
-        form = InvoiceForm(instance=invoice)
+        form = InvoiceForm(instance=invoice, user=request.user)
         formset = InvoiceItemFormSet(instance=invoice)
         return render(request, self.template_name, self._context(request, form, formset, invoice))
 
@@ -212,7 +237,7 @@ class InvoiceUpdateView(_InvoiceEditorView):
         if not invoice.is_editable:
             messages.warning(request, _("Only draft invoices can be edited."))
             return redirect("sales:invoice_detail", pk=invoice.pk)
-        form = InvoiceForm(request.POST, instance=invoice)
+        form = InvoiceForm(request.POST, instance=invoice, user=request.user)
         formset = InvoiceItemFormSet(request.POST, instance=invoice)
         if form.is_valid() and formset.is_valid():
             invoice = self._save(request, form, formset, invoice)
@@ -230,6 +255,9 @@ class InvoiceDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView)
     raise_exception = True
     template_name = "sales/invoice_detail.html"
     context_object_name = "invoice"
+
+    def get_queryset(self):
+        return _visible_invoices(self.request.user)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -250,7 +278,7 @@ class InvoiceIssueView(LoginRequiredMixin, PermissionRequiredMixin, View):
     raise_exception = True
 
     def post(self, request, pk):
-        invoice = get_object_or_404(Invoice, pk=pk)
+        invoice = get_object_or_404(_visible_invoices(request.user), pk=pk)
         try:
             issue_invoice(invoice, request.user)
         except ValidationError as exc:
@@ -266,7 +294,7 @@ class InvoiceCancelView(LoginRequiredMixin, PermissionRequiredMixin, View):
     raise_exception = True
 
     def post(self, request, pk):
-        invoice = get_object_or_404(Invoice, pk=pk)
+        invoice = get_object_or_404(_visible_invoices(request.user), pk=pk)
         cancel_invoice(invoice, request.user)
         log_user_action(request, "CANCEL", instance=invoice)
         messages.warning(request, _("Invoice %(no)s cancelled.") % {"no": invoice.number})
@@ -279,6 +307,9 @@ class InvoicePrintView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     raise_exception = True
     template_name = "sales/invoice_print.html"
     context_object_name = "invoice"
+
+    def get_queryset(self):
+        return _visible_invoices(self.request.user)
 
     def get_context_data(self, **kwargs):
         from dlux.translations import get_current_language_code
@@ -297,7 +328,7 @@ class PaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, View):
     raise_exception = True
 
     def post(self, request, pk):
-        invoice = get_object_or_404(Invoice, pk=pk)
+        invoice = get_object_or_404(_visible_invoices(request.user), pk=pk)
         if invoice.status in (Invoice.STATUS_DRAFT, Invoice.STATUS_CANCELLED):
             messages.error(request, _("Issue the invoice before recording payments."))
             return redirect("sales:invoice_detail", pk=pk)
@@ -345,12 +376,21 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        user = self.request.user
         today = timezone.localdate()
         month_start = today.replace(day=1)
         live_statuses = [Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL, Invoice.STATUS_PAID]
 
-        today_qs = Invoice.objects.filter(invoice_date=today, status__in=live_statuses)
-        month_qs = Invoice.objects.filter(invoice_date__gte=month_start, status__in=live_statuses)
+        # Role-aware home page. Every panel is both permission-gated (a delivery
+        # courier has no view_invoice) and row-scoped: a rep's figures cover only
+        # their own sales, a manager (view_all_invoice) sees the whole store.
+        ctx["can_view_sales"] = user.has_perm("sales.view_invoice")
+        ctx["can_view_deliveries"] = user.has_perm("sales.view_delivery")
+        ctx["is_sales_manager"] = user_can_view_all(user, Invoice)
+
+        my_invoices = _visible_invoices(user)
+        today_qs = my_invoices.filter(invoice_date=today, status__in=live_statuses)
+        month_qs = my_invoices.filter(invoice_date__gte=month_start, status__in=live_statuses)
 
         ctx["current_rate"] = get_current_rate()
         ctx["has_rate"] = has_configured_rate()
@@ -377,22 +417,33 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ctx["sales_today"] = today_qs.aggregate(t=Sum("total_lyd"))["t"] or Decimal("0")
         ctx["count_today"] = today_qs.count()
         ctx["sales_month"] = month_qs.aggregate(t=Sum("total_lyd"))["t"] or Decimal("0")
-        ctx["outstanding"] = (
-            Invoice.objects.filter(status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL])
-            .aggregate(t=Sum("total_lyd"))["t"] or Decimal("0")
-        ) - (
-            Invoice.objects.filter(status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL])
-            .aggregate(t=Sum("amount_paid"))["t"] or Decimal("0")
+        outstanding_qs = my_invoices.filter(status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL])
+        ctx["outstanding"] = (outstanding_qs.aggregate(t=Sum("total_lyd"))["t"] or Decimal("0")) - (
+            outstanding_qs.aggregate(t=Sum("amount_paid"))["t"] or Decimal("0")
         )
-        ctx["draft_count"] = Invoice.objects.filter(status=Invoice.STATUS_DRAFT).count()
-        ctx["pending_deposits"] = CashDeposit.objects.filter(status=CashDeposit.STATUS_PENDING).count()
-        ctx["recent_invoices"] = Invoice.objects.order_by("-created_at")[:8]
+        ctx["draft_count"] = my_invoices.filter(status=Invoice.STATUS_DRAFT).count()
+        ctx["pending_deposits"] = (
+            apply_ownership(CashDeposit.objects.all(), user)
+            .filter(status=CashDeposit.STATUS_PENDING)
+            .count()
+        )
+        ctx["recent_invoices"] = my_invoices.order_by("-created_at")[:8]
 
-        from catalog.models import Product
+        # Delivery board — the courier's own open jobs (or all, for a dispatcher).
+        if ctx["can_view_deliveries"]:
+            open_deliveries = apply_ownership(
+                Delivery.objects.filter(status__in=Delivery.OPEN_STATUSES), user
+            ).order_by("scheduled_date", "-created_at")
+            ctx["open_deliveries"] = open_deliveries[:8]
+            ctx["open_delivery_count"] = open_deliveries.count()
 
-        low = [p for p in Product.objects.filter(track_stock=True, is_active=True) if p.is_low_stock]
-        ctx["low_stock"] = low[:8]
-        ctx["low_stock_count"] = len(low)
+        # Low-stock is a catalog concern — only for users who can see products.
+        if user.has_perm("catalog.view_product"):
+            from catalog.models import Product
+
+            low = [p for p in Product.objects.filter(track_stock=True, is_active=True) if p.is_low_stock]
+            ctx["low_stock"] = low[:8]
+            ctx["low_stock_count"] = len(low)
         return ctx
 
 

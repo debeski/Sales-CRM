@@ -4,6 +4,7 @@ from django.views.generic import RedirectView
 from .views import (
     CustomerListView,
     DashboardView,
+    DeliveryListView,
     InvoiceCancelView,
     InvoiceCreateView,
     InvoiceDetailView,
@@ -42,6 +43,7 @@ urlpatterns = [
     path("<int:pk>/print/", InvoicePrintView.as_view(), name="invoice_print"),
     path("<int:pk>/pay/", PaymentCreateView.as_view(), name="payment_add"),
     path("customers/", CustomerListView.as_view(), name="customer_list"),
+    path("deliveries/", DeliveryListView.as_view(), name="delivery_list"),
     path("payments/", PaymentListView.as_view(), name="payment_list"),
     path("report/", SalesReportView.as_view(), name="report"),
     path("report/export/", _report_export, name="report_export"),

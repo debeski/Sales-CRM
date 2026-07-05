@@ -13,6 +13,7 @@ from io import BytesIO
 from django.db.models import Count, Sum
 from django.utils import timezone
 
+from common.access import apply_ownership
 from common.i18n import t
 
 from .models import Invoice, InvoiceItem
@@ -44,10 +45,15 @@ def parse_window(date_from, date_to):
 def build_sales_report(date_from, date_to, actor=None):
     """Aggregate issued/partial/paid invoices within the window into a report dict.
 
-    ``Invoice.objects`` is already scope- and soft-delete-filtered, so a scoped
-    user only ever reports on their own data.
+    Row-scoped by ``actor``: a sales rep only ever reports on their own sales,
+    while a manager holding ``view_all_invoice`` reports on the whole store
+    (see ``common.access.apply_ownership``). ``actor=None`` is an unrestricted
+    system/programmatic context (the web views always pass ``request.user``).
     """
-    qs = Invoice.objects.filter(status__in=LIVE_STATUSES, invoice_date__range=(date_from, date_to))
+    qs = Invoice.objects.all()
+    if actor is not None:
+        qs = apply_ownership(qs, actor)
+    qs = qs.filter(status__in=LIVE_STATUSES, invoice_date__range=(date_from, date_to))
 
     agg = qs.aggregate(total=Sum("total_lyd"), paid=Sum("amount_paid"), count=Count("id"))
     total = agg["total"] or _Z

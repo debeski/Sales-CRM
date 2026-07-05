@@ -24,7 +24,15 @@ TWO_PLACES = Decimal("0.01")
 
 
 class Customer(ScopedModel):
-    """A buyer. Optional on an invoice — walk-in sales just type a name."""
+    """A buyer. Optional on an invoice — walk-in sales just type a name.
+
+    Customers are **private to the rep who created them** (row-level visibility):
+    a sales rep sees only their own customer book, while a manager holding
+    ``view_all_customer`` sees everyone's. See ``common.access``.
+    """
+
+    #: Row-ownership lookups consumed by common.access.apply_ownership.
+    OWNER_FIELDS = ("created_by",)
 
     name = models.CharField(max_length=200, verbose_name="Name")
     phone = models.CharField(max_length=40, blank=True, db_index=True, verbose_name="Phone")
@@ -36,6 +44,7 @@ class Customer(ScopedModel):
         verbose_name = "Customer"
         verbose_name_plural = "Customers"
         ordering = ["name"]
+        permissions = [("view_all_customer", "Can view all customers (not just own)")]
 
     def __str__(self):
         return self.name
@@ -55,7 +64,16 @@ class Invoice(ScopedModel):
         (STATUS_CANCELLED, "Cancelled"),
     )
 
+    #: Row-ownership lookups consumed by common.access.apply_ownership. An
+    #: invoice belongs to its assigned salesperson (falls back to whoever
+    #: created it); managers hold ``view_all_invoice`` to see every rep's sales.
+    OWNER_FIELDS = ("salesperson", "created_by")
+
     number = models.CharField(max_length=20, unique=True, blank=True, verbose_name="Invoice No.")
+    salesperson = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="invoices_as_salesperson", verbose_name="Salesperson",
+    )
     customer = models.ForeignKey(
         Customer, null=True, blank=True, on_delete=models.SET_NULL,
         related_name="invoices", verbose_name="Customer",
@@ -109,6 +127,8 @@ class Invoice(ScopedModel):
             ("issue_invoice", "Can issue (finalize) invoices"),
             ("cancel_invoice", "Can cancel invoices"),
             ("view_sales_report", "Can view sales reports"),
+            ("view_all_invoice", "Can view all invoices (not just own)"),
+            ("assign_salesperson", "Can assign an invoice's salesperson"),
         ]
 
     def __str__(self):
@@ -117,6 +137,15 @@ class Invoice(ScopedModel):
     def save(self, *args, **kwargs):
         if self.exchange_rate is None:
             self.exchange_rate = get_current_rate()
+        # Default the salesperson to the acting user on first save (a manager may
+        # override it explicitly in the editor). Kept in sync with ScopedModel's
+        # created_by so ownership works even for API/import creates with no form.
+        if self.salesperson_id is None and self.pk is None:
+            from dlux.middleware import get_current_user
+
+            user = get_current_user()
+            if user is not None and getattr(user, "is_authenticated", False):
+                self.salesperson = user
         super().save(*args, **kwargs)
         if not self.number:
             self.number = f"INV-{self.pk:06d}"
@@ -253,7 +282,15 @@ class InvoiceItem(models.Model):
 
 
 class Payment(ScopedModel):
-    """A payment received against an invoice. Maintains the invoice's paid total."""
+    """A payment received against an invoice. Maintains the invoice's paid total.
+
+    Visible on the standalone payments list to whoever recorded it *or* the
+    salesperson of its invoice — so a rep sees payments a cashier keyed against
+    their sale. Managers holding ``view_all_payment`` see all.
+    """
+
+    #: Row-ownership lookups consumed by common.access.apply_ownership.
+    OWNER_FIELDS = ("created_by", "invoice__salesperson")
 
     METHOD_CASH = "cash"
     METHOD_BANK = "bank_transfer"
@@ -281,6 +318,7 @@ class Payment(ScopedModel):
         verbose_name = "Payment"
         verbose_name_plural = "Payments"
         ordering = ["-paid_at"]
+        permissions = [("view_all_payment", "Can view all payments (not just own)")]
 
     def __str__(self):
         return f"{self.amount} LYD on {self.invoice_id}"
@@ -316,3 +354,94 @@ class Payment(ScopedModel):
         ids = {i for i in (self.deposit_id, prev_deposit_id) if i}
         for deposit in CashDeposit.objects.filter(pk__in=ids):
             deposit.recalc_amount()
+
+
+class Delivery(ScopedModel):
+    """A delivery job — the courier-facing side of a sale.
+
+    A delivery employee sees **only the jobs assigned to them** (row-level
+    visibility): they never touch the invoice list, sales figures or other
+    reps' work. A dispatcher/manager holding ``view_all_delivery`` sees the whole
+    board and assigns couriers via ``assign_delivery``.
+
+    Linking to an ``Invoice`` is optional (ad-hoc drop-offs exist); the recipient
+    address is snapshotted so the job stays self-contained if the invoice/customer
+    changes later.
+    """
+
+    #: Row-ownership lookups consumed by common.access.apply_ownership.
+    OWNER_FIELDS = ("assigned_to", "created_by")
+
+    STATUS_PENDING = "pending"       # created, not yet assigned/scheduled
+    STATUS_ASSIGNED = "assigned"     # a courier is responsible
+    STATUS_OUT = "out"               # out for delivery
+    STATUS_DELIVERED = "delivered"
+    STATUS_FAILED = "failed"         # attempted, could not deliver
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ASSIGNED, "Assigned"),
+        (STATUS_OUT, "Out for Delivery"),
+        (STATUS_DELIVERED, "Delivered"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_CANCELLED, "Cancelled"),
+    )
+    OPEN_STATUSES = (STATUS_PENDING, STATUS_ASSIGNED, STATUS_OUT)
+
+    invoice = models.ForeignKey(
+        Invoice, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="deliveries", verbose_name="Invoice",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="deliveries", verbose_name="Assigned To",
+    )
+    recipient = models.CharField(max_length=200, blank=True, verbose_name="Recipient")
+    phone = models.CharField(max_length=40, blank=True, verbose_name="Phone")
+    address = models.CharField(max_length=255, verbose_name="Address")
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True,
+        verbose_name="Status",
+    )
+    scheduled_date = models.DateField(null=True, blank=True, verbose_name="Scheduled Date")
+    delivered_at = models.DateTimeField(null=True, blank=True, editable=False, verbose_name="Delivered At")
+    notes = models.TextField(blank=True, verbose_name="Notes")
+
+    class Meta:
+        verbose_name = "Delivery"
+        verbose_name_plural = "Deliveries"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"], name="sales_deliv_status_idx"),
+            models.Index(fields=["assigned_to", "status"], name="sales_deliv_assignee_idx"),
+        ]
+        permissions = [
+            ("view_all_delivery", "Can view all deliveries (not just assigned)"),
+            ("assign_delivery", "Can assign deliveries to couriers"),
+        ]
+
+    def __str__(self):
+        label = self.recipient or (self.invoice.display_customer if self.invoice_id else "")
+        return f"{label} — {self.get_status_display()}".strip(" —")
+
+    @property
+    def status_label(self):
+        from common.i18n import t
+        return t(f"delivery_status_{self.status}", self.get_status_display())
+
+    def save(self, *args, **kwargs):
+        # Snapshot recipient/address/phone from the linked invoice on first save
+        # so the courier's card is self-contained. Auto-advance pending→assigned
+        # when a courier is set, and stamp the delivery time when it lands.
+        if self.invoice_id:
+            if not self.recipient:
+                self.recipient = self.invoice.display_customer
+            if not self.phone:
+                self.phone = self.invoice.customer_phone
+            if not self.address:
+                self.address = self.invoice.customer_address
+        if self.status == self.STATUS_PENDING and self.assigned_to_id:
+            self.status = self.STATUS_ASSIGNED
+        if self.status == self.STATUS_DELIVERED and self.delivered_at is None:
+            self.delivered_at = timezone.now()
+        super().save(*args, **kwargs)
