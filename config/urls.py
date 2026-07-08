@@ -3,6 +3,8 @@ Generated with django-lux 1.2.1.
 Project name: switch-pos.
 Generated on: 2026-06-22.
 """
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
@@ -34,3 +36,8 @@ urlpatterns = [
     path("sales/", include(("sales.urls", "sales"), namespace="sales")),
     # DjangoLux generated routes end
 ]
+
+# Serve uploaded media via Django only in DEBUG (local runserver). In production
+# Caddy file_servers /media/ directly; static() returns [] when DEBUG is False.
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

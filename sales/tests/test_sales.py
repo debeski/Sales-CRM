@@ -10,6 +10,52 @@ from sales.services import cancel_invoice, issue_invoice
 from ..urls import app_name
 
 
+class InvoiceFormLayoutTests(TestCase):
+    """The invoice header form gets the same multi-column grid as modal forms;
+    the items formset is untouched. Rendered via the {% crispy %} tag."""
+
+    def test_header_grid_keeps_hidden_customer_and_all_fields(self):
+        from crispy_forms.utils import render_crispy_form
+
+        from sales.forms import InvoiceForm
+
+        form = InvoiceForm(user=None)  # a rep: no salesperson picker
+        self.assertTrue(getattr(form, "helper", None) and form.helper.layout)
+        html = render_crispy_form(form)
+        self.assertIn('class="row', html)
+        self.assertIn("col-md-6", html)
+        self.assertIn('name="customer"', html)  # hidden FK still emitted
+        for f in ("customer_name", "customer_phone", "customer_address",
+                  "invoice_date", "discount_percent", "discount_amount", "notes"):
+            self.assertIn(f'name="{f}"', html, f"header field {f} missing")
+
+    def test_optional_attachment_dlux_widget(self):
+        import tempfile
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import override_settings
+
+        from sales.forms import InvoiceForm
+
+        form = InvoiceForm(user=None)
+        self.assertEqual(form.fields["attachment"].widget.template_name, "dlux/forms/file_input.html")
+        self.assertFalse(form.fields["attachment"].required)  # optional
+        self.assertTrue(form.is_multipart())
+
+        with override_settings(MEDIA_ROOT=tempfile.mkdtemp()):
+            bound = InvoiceForm(
+                data={"customer_name": "X", "invoice_date": "2026-07-08",
+                      "discount_percent": "0", "discount_amount": "0"},
+                files={"attachment": SimpleUploadedFile("inv.pdf", b"%PDF-1.4 x", content_type="application/pdf")},
+                user=None,
+            )
+            self.assertTrue(bound.is_valid(), bound.errors)
+            inv = bound.save(commit=False)
+            inv.exchange_rate = Decimal("5.00")
+            inv.save()
+            self.assertTrue(inv.attachment.name.startswith("invoices/"))
+
+
 class SalesConfigScaffoldTests(SimpleTestCase):
     def test_urls_namespace_matches_app_name(self):
         self.assertEqual(app_name, "sales")

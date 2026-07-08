@@ -6,20 +6,23 @@ This is distinct from DjangoLux's activity-log report overview: that reports *wh
 did what*; this reports *what was sold*. Money figures are in LYD (the frozen
 per-invoice totals), so the report is stable regardless of later rate moves.
 """
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 
-from django.db.models import Count, Sum
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum
+from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
 from common.access import apply_ownership
 from common.i18n import t
+from finance.services import get_current_rate, usd_to_lyd
 
-from .models import Invoice, InvoiceItem
+from .models import Invoice, InvoiceItem, Payment
 
 LIVE_STATUSES = [Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL, Invoice.STATUS_PAID]
 _Z = Decimal("0.00")
+_MONEY = DecimalField(max_digits=20, decimal_places=2)
 
 
 def default_window():
@@ -205,3 +208,96 @@ def build_sales_report_xlsx(report):
     buffer = BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+# --------------------------------------------------------------------------- #
+# Fiscal-year financial report (whole-store P&L — never row-scoped)
+# --------------------------------------------------------------------------- #
+def fiscal_year_window(year):
+    """A fiscal year in Libya is the calendar year: Jan 1 – Dec 31 of ``year``."""
+    return date(year, 1, 1), date(year, 12, 31)
+
+
+def available_fiscal_years():
+    """Years to offer in the picker: from the first invoice year to this year."""
+    this_year = timezone.localdate().year
+    first = Invoice.objects.order_by("invoice_date").values_list("invoice_date", flat=True).first()
+    start = first.year if first else this_year
+    return list(range(this_year, start - 1, -1))
+
+
+def build_financial_report(date_from, date_to):
+    """Whole-store financial summary for a period (a fiscal year by default).
+
+    Deliberately NOT ``apply_ownership``-scoped — this is an owner/manager P&L
+    over the entire business, gated by ``sales.view_financial_report``.
+
+    Period figures: revenue, COGS (estimate), gross profit, cash collected.
+    Snapshot (current) figures: outstanding receivables, inventory value — these
+    are point-in-time, labelled as such in the template.
+
+    COGS uses the unit cost **frozen on each invoice line at the time of sale**
+    (``InvoiceItem.unit_cost_usd``), converted at that invoice's own frozen rate —
+    so it's exact. Lines created before cost-freezing fall back to the product's
+    current cost via ``Coalesce``.
+    """
+    from catalog.models import Product
+
+    live = Invoice.objects.filter(status__in=LIVE_STATUSES, invoice_date__range=(date_from, date_to))
+    agg = live.aggregate(revenue=Sum("total_lyd"), count=Count("id"))
+    revenue = agg["revenue"] or _Z
+
+    # COGS = qty × frozen unit cost (fallback: current product cost) × frozen rate.
+    cogs_expr = ExpressionWrapper(
+        F("quantity")
+        * Coalesce(F("unit_cost_usd"), F("product__cost_usd"))
+        * F("invoice__exchange_rate"),
+        output_field=_MONEY,
+    )
+    cogs = (
+        InvoiceItem.objects.filter(
+            invoice__in=live, kind=InvoiceItem.KIND_PRODUCT, product__isnull=False
+        ).aggregate(c=Sum(cogs_expr))["c"]
+    ) or _Z
+    gross_profit = revenue - cogs
+    margin = (gross_profit / revenue * Decimal("100")) if revenue else _Z
+
+    # Cash actually collected in the period.
+    cash_collected = (
+        Payment.objects.filter(paid_at__date__range=(date_from, date_to)).aggregate(s=Sum("amount"))["s"]
+    ) or _Z
+
+    # Current outstanding receivables (issued/partial, any date).
+    open_qs = Invoice.objects.filter(status__in=[Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL])
+    open_agg = open_qs.aggregate(total=Sum("total_lyd"), paid=Sum("amount_paid"))
+    receivables = (open_agg["total"] or _Z) - (open_agg["paid"] or _Z)
+
+    # Current closing-stock value (Σ stock × unit cost), USD → LYD at live rate.
+    rate = get_current_rate()
+    inv_value_usd = (
+        Product.objects.filter(is_active=True, track_stock=True).aggregate(
+            v=Sum(ExpressionWrapper(F("stock_qty") * F("cost_usd"), output_field=_MONEY))
+        )["v"]
+    ) or _Z
+    inventory_value = usd_to_lyd(inv_value_usd, rate)
+
+    # Revenue by month for a trend table.
+    monthly = [
+        {"month": row["m"], "total": row["t"] or _Z}
+        for row in live.annotate(m=TruncMonth("invoice_date")).values("m").annotate(t=Sum("total_lyd")).order_by("m")
+    ]
+
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "year": date_from.year if date_from.year == date_to.year else None,
+        "revenue": revenue,
+        "invoice_count": agg["count"] or 0,
+        "cogs": cogs,
+        "gross_profit": gross_profit,
+        "margin_percent": margin,
+        "cash_collected": cash_collected,
+        "receivables": receivables,
+        "inventory_value": inventory_value,
+        "monthly": monthly,
+    }

@@ -17,12 +17,31 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 from dlux.models import ScopedModel
 
-from finance.services import usd_to_lyd
+from finance.services import get_current_rate, usd_to_lyd
 
 TWO_PLACES = Decimal("0.01")
+
+
+def _image_detail_row(instance, label):
+    """A dlux detail row rendering the instance's image as a thumbnail (HTML), or
+    ``None`` when there's no image. Consumed by ``get_modal_context`` and rendered
+    via the project's ``extra_detail_fields`` (is_html) override."""
+    if not instance.image:
+        return None
+    from django.utils.html import format_html
+
+    return {
+        "label": label,
+        "is_html": True,
+        "value": format_html(
+            '<img src="{}" alt="" class="img-fluid rounded border" style="max-height:180px">',
+            instance.image.url,
+        ),
+    }
 
 
 class Category(ScopedModel):
@@ -67,6 +86,7 @@ class Product(ScopedModel):
     )
     description = models.TextField(blank=True, verbose_name="Description")
     barcode = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="Barcode")
+    image = models.ImageField(upload_to="catalog/products/", blank=True, verbose_name="Image")
     unit = models.CharField(max_length=12, choices=UNIT_CHOICES, default=UNIT_PIECE, verbose_name="Unit")
 
     # --- Pricing (USD base) ---
@@ -151,14 +171,16 @@ class Product(ScopedModel):
         detail card matches the product list, whose price column is also derived."""
         from common.i18n import t
         price = self.selling_price_lyd()
-        return {
-            "extra_detail_fields": [
-                {
-                    "label": t("label_product_selling_price_lyd", "Selling Price (LYD)"),
-                    "value": f"{price:,.2f}" if price is not None else "—",
-                }
-            ]
-        }
+        rows = [
+            {
+                "label": t("label_product_selling_price_lyd", "Selling Price (LYD)"),
+                "value": f"{price:,.2f}" if price is not None else "—",
+            }
+        ]
+        image_row = _image_detail_row(self, t("label_product_image", "Image"))
+        if image_row:
+            rows.insert(0, image_row)
+        return {"extra_detail_fields": rows}
 
     @property
     def is_low_stock(self):
@@ -187,6 +209,7 @@ class Service(ScopedModel):
         verbose_name="Service Type",
     )
     description = models.TextField(blank=True, verbose_name="Description")
+    image = models.ImageField(upload_to="catalog/services/", blank=True, verbose_name="Image")
     price_usd = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True,
         validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Price (USD)",
@@ -223,14 +246,16 @@ class Service(ScopedModel):
         "Per job" marker when the service is quoted per job)."""
         from common.i18n import t
         price = self.selling_price_lyd()
-        return {
-            "extra_detail_fields": [
-                {
-                    "label": t("label_service_selling_price_lyd", "Selling Price (LYD)"),
-                    "value": f"{price:,.2f}" if price is not None else t("ui_per_job", "Per job"),
-                }
-            ]
-        }
+        rows = [
+            {
+                "label": t("label_service_selling_price_lyd", "Selling Price (LYD)"),
+                "value": f"{price:,.2f}" if price is not None else t("ui_per_job", "Per job"),
+            }
+        ]
+        image_row = _image_detail_row(self, t("label_service_image", "Image"))
+        if image_row:
+            rows.insert(0, image_row)
+        return {"extra_detail_fields": rows}
 
 
 class StockMovement(ScopedModel):
@@ -292,3 +317,138 @@ class StockMovement(ScopedModel):
             Product.objects.filter(pk=self.product_id).update(
                 stock_qty=models.F("stock_qty") + self.signed_quantity
             )
+
+
+class StockTake(ScopedModel):
+    """A physical inventory count (جرد). You snapshot the system quantity per
+    product, enter what you actually counted on the shelf, then **apply** the
+    take — which posts an Adjustment ``StockMovement`` for every discrepancy so
+    ``stock_qty`` matches reality. The variance list is the audit trail.
+
+    Inventory is a management concern (not per-rep), so this is gated purely by
+    permissions and is not row-scoped — no ``OWNER_FIELDS``.
+    """
+
+    STATUS_OPEN = "open"
+    STATUS_APPLIED = "applied"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = (
+        (STATUS_OPEN, "Open"),
+        (STATUS_APPLIED, "Applied"),
+        (STATUS_CANCELLED, "Cancelled"),
+    )
+
+    number = models.CharField(max_length=20, unique=True, blank=True, verbose_name="Count No.")
+    count_date = models.DateField(default=timezone.localdate, verbose_name="Count Date")
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=STATUS_OPEN, db_index=True, verbose_name="Status",
+    )
+    notes = models.TextField(blank=True, verbose_name="Notes")
+    applied_at = models.DateTimeField(null=True, blank=True, editable=False, verbose_name="Applied At")
+
+    class Meta:
+        verbose_name = "Stock Take"
+        verbose_name_plural = "Stock Takes"
+        ordering = ["-created_at"]
+        permissions = [
+            ("apply_stocktake", "Can apply a stock take (post adjustments)"),
+            ("view_inventory_valuation", "Can view the inventory valuation report"),
+        ]
+
+    def __str__(self):
+        return self.number or f"(count #{self.pk})"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.number:
+            self.number = f"ST-{self.pk:06d}"
+            super().save(update_fields=["number"])
+
+    @property
+    def status_label(self):
+        from common.i18n import t
+        return t(f"stocktake_status_{self.status}", self.get_status_display())
+
+    @property
+    def is_open(self):
+        return self.status == self.STATUS_OPEN
+
+    @property
+    def discrepancy_lines(self):
+        """Counted lines whose count differs from the system snapshot."""
+        return [ln for ln in self.lines.all() if ln.variance not in (None, Decimal("0.00"), 0)]
+
+    @property
+    def counted_count(self):
+        return sum(1 for ln in self.lines.all() if ln.counted_qty is not None)
+
+    @property
+    def total_variance_value_lyd(self):
+        rate = get_current_rate()
+        return sum((ln.variance_value_lyd(rate) for ln in self.discrepancy_lines), Decimal("0.00"))
+
+    def apply(self, actor=None):
+        """Post an Adjustment movement for every counted discrepancy, bringing
+        ``stock_qty`` to the counted figure, then lock the take as applied."""
+        from django.core.exceptions import ValidationError
+        from django.db import transaction
+
+        if self.status != self.STATUS_OPEN:
+            raise ValidationError("Only an open stock take can be applied.")
+        with transaction.atomic():
+            for line in self.lines.select_related("product"):
+                variance = line.variance
+                if variance in (None, Decimal("0.00"), 0):
+                    continue
+                if not line.product.track_stock:
+                    continue
+                StockMovement.objects.create(
+                    product=line.product,
+                    movement_type=StockMovement.TYPE_ADJUST,
+                    quantity=variance,  # signed delta counted − system
+                    reason=f"Stock take {self.number}",
+                    reference=self.number,
+                )
+            self.status = self.STATUS_APPLIED
+            self.applied_at = timezone.now()
+            self.save(update_fields=["status", "applied_at", "updated_at"])
+
+
+class StockTakeLine(models.Model):
+    """One product counted within a StockTake. ``system_qty`` is the snapshot
+    taken when the line was created; ``counted_qty`` is the physical count
+    (``None`` = not counted). Managed through the parent take."""
+
+    stock_take = models.ForeignKey(StockTake, on_delete=models.CASCADE, related_name="lines")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="stock_take_lines", verbose_name="Product")
+    system_qty = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="System Qty")
+    counted_qty = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Counted Qty",
+    )
+
+    class Meta:
+        verbose_name = "Stock Take Line"
+        verbose_name_plural = "Stock Take Lines"
+        default_permissions = ()  # managed through the parent StockTake
+        ordering = ["product__name"]
+        constraints = [
+            models.UniqueConstraint(fields=["stock_take", "product"], name="uniq_stocktake_product"),
+        ]
+
+    def __str__(self):
+        return f"{self.product.name}: {self.counted_qty}/{self.system_qty}"
+
+    @property
+    def variance(self):
+        """Counted − system (signed), or ``None`` if not yet counted."""
+        if self.counted_qty is None:
+            return None
+        return self.counted_qty - self.system_qty
+
+    def variance_value_lyd(self, rate=None):
+        """LYD value of the discrepancy (variance × unit cost). 0 if uncounted."""
+        v = self.variance
+        if v is None:
+            return Decimal("0.00")
+        return usd_to_lyd(v * (self.product.cost_usd or Decimal("0")), rate)

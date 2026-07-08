@@ -1,0 +1,89 @@
+{% extends "dlux/base.html" %}
+{% block title %}{{ DLUX_STRINGS.page_financial_report|default:"Financial Report" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1">{{ DLUX_STRINGS.page_financial_report|default:"Financial Report" }}</h1>
+            <p class="text-muted mb-0">{{ DLUX_STRINGS.ui_fiscal_year|default:"Fiscal year" }} {{ year }} · {{ report.date_from }} → {{ report.date_to }}</p>
+        </div>
+        <form method="get" class="d-flex align-items-center gap-2 no-print">
+            <label class="text-muted small mb-0">{{ DLUX_STRINGS.ui_fiscal_year|default:"Fiscal year" }}</label>
+            <select name="year" class="form-select" onchange="this.form.submit()" style="width:auto">
+                {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+            </select>
+        </form>
+    </div>
+
+    {# Period figures #}
+    <div class="row g-3 mb-2">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_revenue|default:"Revenue" }}</div>
+                <div class="h4 mb-0">{{ report.revenue|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+                <div class="small text-muted">{{ report.invoice_count }} {{ DLUX_STRINGS.ui_invoices_word|default:"invoices" }}</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_cogs|default:"Cost of Goods" }}</div>
+                <div class="h4 mb-0">{{ report.cogs|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_gross_profit|default:"Gross Profit" }}</div>
+                <div class="h4 mb-0 {% if report.gross_profit < 0 %}text-danger{% else %}text-success{% endif %}">{{ report.gross_profit|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+                <div class="small text-muted">{{ report.margin_percent|floatformat:1 }}% {{ DLUX_STRINGS.ui_margin|default:"margin" }}</div>
+            </div></div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_cash_collected|default:"Cash Collected" }}</div>
+                <div class="h4 mb-0">{{ report.cash_collected|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+            </div></div>
+        </div>
+    </div>
+
+    {# Current snapshot figures (point-in-time, not the period) #}
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_receivables|default:"Outstanding Receivables" }}</div>
+                    <div class="small text-muted">{{ DLUX_STRINGS.ui_as_of_now|default:"current" }}</div>
+                </div>
+                <div class="h4 mb-0 text-danger">{{ report.receivables|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+            </div></div>
+        </div>
+        <div class="col-sm-6">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_inventory_value|default:"Inventory Value" }}</div>
+                    <div class="small text-muted">{{ DLUX_STRINGS.ui_as_of_now|default:"current" }}</div>
+                </div>
+                <div class="h4 mb-0">{{ report.inventory_value|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_revenue_by_month|default:"Revenue by Month" }}</div>
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead class="table-light"><tr><th>{{ DLUX_STRINGS.ui_month|default:"Month" }}</th><th class="text-end">{{ DLUX_STRINGS.ui_revenue|default:"Revenue" }} (LYD)</th></tr></thead>
+                <tbody>
+                    {% for m in report.monthly %}
+                    <tr><td>{{ m.month|date:"Y-m" }}</td><td class="text-end">{{ m.total|floatformat:2 }}</td></tr>
+                    {% empty %}
+                    <tr><td colspan="2" class="text-center text-muted py-4">{{ DLUX_STRINGS.ui_no_sales_period|default:"No sales in this period." }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <p class="text-muted small mt-3 mb-0">{{ DLUX_STRINGS.ui_cogs_note|default:"Cost of goods uses each line's unit cost frozen at the time of sale (older lines fall back to current cost)." }}</p>
+</div>
+{% endblock %}

@@ -10,6 +10,9 @@
             {% if perms.sales.view_sales_report %}
             <a href="{% url 'sales:report' %}" class="btn btn-outline-secondary rounded-pill"><i class="bi bi-graph-up me-1"></i>{{ DLUX_STRINGS.ui_reports }}</a>
             {% endif %}
+            {% if perms.sales.view_financial_report %}
+            <a href="{% url 'sales:financial_report' %}" class="btn btn-outline-secondary rounded-pill"><i class="bi bi-cash-stack me-1"></i>{{ DLUX_STRINGS.page_financial_report|default:"Financial" }}</a>
+            {% endif %}
             {% if perms.sales.add_invoice %}
             <a href="{% url 'sales:invoice_create' %}" class="btn btn-primary rounded-pill"><i class="bi bi-plus-lg me-1"></i>{{ DLUX_STRINGS.ui_new_invoice }}</a>
             {% endif %}

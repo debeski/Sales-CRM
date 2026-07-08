@@ -59,6 +59,13 @@ issued/partial/paid ──cancel──▶ cancelled  (stock restored)
 - **Cancel** (`cancel_invoice`): if the invoice had drawn stock, it is **restored**
   via reversing `StockMovement` IN rows.
 
+## Catalog images
+
+Products and Services carry an optional photo (`image`). It's shown as a thumbnail
+in the catalog lists and enlarged in the item's detail card. On a phone the upload
+field offers the camera or the gallery. Purely descriptive — it never affects
+pricing, stock or invoices.
+
 ## Inventory
 
 - `Product.stock_qty` is **only** changed through `StockMovement` (the ledger is
@@ -66,6 +73,58 @@ issued/partial/paid ──cancel──▶ cancelled  (stock restored)
   with a "Stock In" movement.
 - Movements are applied atomically (`F()` expression) on insert.
 - Low stock = `track_stock and stock_qty ≤ reorder_level` (shown on the dashboard).
+
+## Stock take (physical inventory count / جرد)
+
+The **annual (or periodic) inventory count**. You count what's physically on the
+shelves and reconcile it against what the system thinks you have:
+
+1. Start a count (`StockTake`) — it snapshots the current system quantity for
+   every active stock-tracked product and gives you a sheet to enter the counted
+   quantity per item (blank = not counted). Opens in `open` status.
+2. The count's page shows a **variance report**: system vs counted, the signed
+   variance, and the LYD value of each discrepancy (variance × unit cost).
+3. **Apply** it (needs `apply_stocktake`) — the system posts one **Adjustment**
+   `StockMovement` per real discrepancy on a tracked product, so `stock_qty`
+   becomes the counted figure, and the take locks as `applied` (can't re-apply).
+   Adjustments flow through the same append-only ledger as every other stock
+   change, so the correction is fully auditable.
+
+Apply promptly after counting: the adjustment is `counted − system-snapshot`, so
+a sale between the snapshot and applying would skew it.
+
+## Inventory valuation
+
+A read-only report of **what the stock on hand is worth right now** —
+Σ(`stock_qty` × `cost_usd`), shown in USD and converted to LYD at the live rate.
+This is the closing-stock figure the fiscal-year financial report uses. Gated
+by `view_inventory_valuation`.
+
+## Fiscal year & the financial report
+
+A **fiscal year** here is the calendar year (Jan 1 – Dec 31), which is the norm
+in Libya. The **financial report** (`/sales/financial/`, gated by
+`view_financial_report`) is a whole-store owner P&L for a chosen year — it is
+never per-rep. It reports:
+
+- **Period figures** (for the selected year): **revenue** (issued/partial/paid
+  invoices), **cost of goods (estimate)**, **gross profit** + margin, and **cash
+  collected** (payments received in the year).
+- **Current snapshots** (point-in-time, labelled *current*): **outstanding
+  receivables** and **inventory value**.
+
+**COGS is exact**: each invoice line freezes the product's unit cost at the time
+of sale (`InvoiceItem.unit_cost_usd`), just like it freezes the selling price and
+rate — so a later cost change never rewrites a past invoice's profit. COGS =
+Σ(quantity × frozen unit cost × the invoice's frozen rate). Lines created before
+cost-freezing was added fall back to the product's current cost.
+
+## Invoice attachment
+
+An invoice may carry an optional **attachment** — a scan or photo of the signed
+paper invoice (or a supporting document, image or PDF). It's captured with the
+rich file field (drag-drop, phone camera, or a desktop scanner) and shown as a
+link on the invoice's page. Purely a record; it never affects totals.
 
 ## Cash deposits (ايداع نقدي)
 

@@ -2,10 +2,11 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.forms import inlineformset_factory
 
+from dlux.forms import _build_archive_file_widget
 from dlux.translations import get_strings
 from dlux.utils import set_field_attrs
 
-from common.forms import translate_choice_fields, translate_help_text
+from common.forms import build_grid_helper, translate_choice_fields, translate_help_text
 
 from .models import Customer, Delivery, Invoice, InvoiceItem, Payment
 
@@ -29,6 +30,7 @@ class CustomerForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         set_field_attrs(self)
         translate_help_text(self)
+        build_grid_helper(self, [("name", "phone"), ("address", "is_active"), ("notes",)])
 
 
 class InvoiceForm(forms.ModelForm):
@@ -40,7 +42,7 @@ class InvoiceForm(forms.ModelForm):
         fields = [
             "salesperson",
             "customer", "customer_name", "customer_phone", "customer_address",
-            "invoice_date", "discount_percent", "discount_amount", "notes",
+            "invoice_date", "discount_percent", "discount_amount", "notes", "attachment",
         ]
         widgets = {
             "invoice_date": forms.DateInput(attrs={"type": "date"}),
@@ -71,6 +73,26 @@ class InvoiceForm(forms.ModelForm):
         })
         set_field_attrs(self)
         translate_help_text(self)
+        # Optional invoice document (scan/photo of the signed invoice). dlux's
+        # rich file widget: drag-drop + preview + Upload (camera on a phone via
+        # accept) + Scan (desktop TWAIN). PDF or image.
+        self.fields["attachment"].widget = _build_archive_file_widget(
+            field_label=self.fields["attachment"].label, show_scan=True,
+            attrs={"accept": "image/*,application/pdf"},
+        )
+        self.fields["attachment"].label = ""
+        # Multi-column layout for the invoice HEADER (the items grid is a
+        # separate formset in the template). The template renders this with the
+        # {% crispy form %} tag (the |crispy filter would drop this helper). The
+        # hidden customer FK is emitted by build_grid_helper as a bare input.
+        build_grid_helper(self, [
+            ("salesperson", "invoice_date"),
+            ("customer_name", "customer_phone"),
+            ("customer_address",),
+            ("discount_percent", "discount_amount"),
+            ("notes",),
+            ("attachment",),
+        ])
 
 
 class InvoiceItemForm(forms.ModelForm):
@@ -157,3 +179,10 @@ class DeliveryForm(forms.ModelForm):
         set_field_attrs(self)
         translate_choice_fields(self)
         translate_help_text(self)
+        build_grid_helper(self, [
+            ("invoice", "assigned_to"),
+            ("recipient", "phone"),
+            ("address", "status"),
+            ("scheduled_date",),
+            ("notes",),
+        ])

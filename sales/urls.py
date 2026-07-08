@@ -5,6 +5,7 @@ from .views import (
     CustomerListView,
     DashboardView,
     DeliveryListView,
+    FinancialReportView,
     InvoiceCancelView,
     InvoiceCreateView,
     InvoiceDetailView,
@@ -47,4 +48,5 @@ urlpatterns = [
     path("payments/", PaymentListView.as_view(), name="payment_list"),
     path("report/", SalesReportView.as_view(), name="report"),
     path("report/export/", _report_export, name="report_export"),
+    path("financial/", FinancialReportView.as_view(), name="financial_report"),
 ]

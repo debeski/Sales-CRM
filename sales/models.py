@@ -113,6 +113,8 @@ class Invoice(ScopedModel):
     amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"), editable=False, verbose_name="Amount Paid (LYD)")
 
     notes = models.TextField(blank=True, verbose_name="Notes")
+    # Optional scan/photo of the physical (signed) invoice or a supporting doc.
+    attachment = models.FileField(upload_to="invoices/", blank=True, verbose_name="Attachment")
     issued_at = models.DateTimeField(null=True, blank=True, editable=False, verbose_name="Issued At")
 
     class Meta:
@@ -129,6 +131,7 @@ class Invoice(ScopedModel):
             ("view_sales_report", "Can view sales reports"),
             ("view_all_invoice", "Can view all invoices (not just own)"),
             ("assign_salesperson", "Can assign an invoice's salesperson"),
+            ("view_financial_report", "Can view the financial (fiscal-year) report"),
         ]
 
     def __str__(self):
@@ -241,6 +244,9 @@ class InvoiceItem(models.Model):
     description = models.CharField(max_length=255, verbose_name="Description")
     unit_price_lyd = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Unit Price (LYD)")
     unit_price_usd = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Unit Price (USD)")
+    # Frozen unit *cost* (USD) at time of sale, for exact COGS in the financial
+    # report. Product lines only; NULL for services/custom or legacy lines.
+    unit_cost_usd = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, editable=False, verbose_name="Unit Cost (USD)")
     quantity = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal("1.00"),
         validators=[MinValueValidator(Decimal("0.01"))], verbose_name="Quantity",
@@ -275,6 +281,10 @@ class InvoiceItem(models.Model):
                 self.description = self.product.name
             elif self.service_id:
                 self.description = self.service.name
+        # Freeze the product's unit cost on first save (fallback for any path
+        # that doesn't set it explicitly — the editor sets it via _apply_item_price).
+        if self.product_id and self.unit_cost_usd is None:
+            self.unit_cost_usd = self.product.cost_usd
         self.line_total_lyd = (Decimal(self.unit_price_lyd) * Decimal(self.quantity)).quantize(
             TWO_PLACES, rounding=ROUND_HALF_UP
         )

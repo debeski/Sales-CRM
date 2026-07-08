@@ -1,0 +1,80 @@
+{% extends "dlux/base.html" %}
+{% block title %}{{ take.number }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h1 class="h3 mb-0">
+            {{ DLUX_STRINGS.model_stocktake|default:"Stock Take" }} {{ take.number }}
+            <span class="badge rounded-pill align-middle {% if take.status == 'applied' %}bg-success{% elif take.status == 'open' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ take.status_label }}</span>
+        </h1>
+        <a href="{% url 'catalog:stock_take_list' %}" class="btn btn-outline-secondary rounded-pill">
+            <i class="bi bi-arrow-left me-1"></i>{{ DLUX_STRINGS.ui_view_all|default:"All" }}
+        </a>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-4">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.label_stocktake_count_date|default:"Count Date" }}</div>
+                <div class="h5 mb-0">{{ take.count_date }}</div>
+                {% if take.applied_at %}<div class="small text-muted">{{ DLUX_STRINGS.ui_applied_at|default:"Applied" }}: {{ take.applied_at|date:"Y-m-d H:i" }}</div>{% endif %}
+            </div></div>
+        </div>
+        <div class="col-sm-4">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_discrepancies|default:"Discrepancies" }}</div>
+                <div class="h5 mb-0">{{ discrepancy_count }} / {{ lines|length }}</div>
+            </div></div>
+        </div>
+        <div class="col-sm-4">
+            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+                <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_variance_value|default:"Net Variance Value" }}</div>
+                <div class="h5 mb-0 {% if total_variance_lyd < 0 %}text-danger{% elif total_variance_lyd > 0 %}text-success{% endif %}">{{ total_variance_lyd|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+            </div></div>
+        </div>
+    </div>
+
+    {% if can_apply %}
+    <form method="post" action="{% url 'catalog:stock_take_apply' take.pk %}" class="mb-4"
+          onsubmit="return confirm('{{ DLUX_STRINGS.ui_apply_confirm|default:"Post adjustments and set stock to the counted quantities?" }}');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success rounded-pill">
+            <i class="bi bi-check2-circle me-1"></i>{{ DLUX_STRINGS.ui_apply_stock_take|default:"Apply — post adjustments" }}
+        </button>
+        <span class="text-muted small ms-2">{{ DLUX_STRINGS.ui_apply_hint|default:"Writes an Adjustment movement for each discrepancy. Cannot be undone." }}</span>
+    </form>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>{{ DLUX_STRINGS.label_product_name|default:"Name" }}</th>
+                        <th class="text-end">{{ DLUX_STRINGS.ui_system_qty|default:"System" }}</th>
+                        <th class="text-end">{{ DLUX_STRINGS.ui_counted_qty|default:"Counted" }}</th>
+                        <th class="text-end">{{ DLUX_STRINGS.ui_variance|default:"Variance" }}</th>
+                        <th class="text-end">{{ DLUX_STRINGS.ui_variance_value|default:"Value (LYD)" }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ln in lines %}
+                    <tr>
+                        <td>{{ ln.product.name }}</td>
+                        <td class="text-end text-muted">{{ ln.system_qty|floatformat:"-2" }}</td>
+                        <td class="text-end">{% if ln.counted_qty is None %}<span class="text-muted">—</span>{% else %}{{ ln.counted_qty|floatformat:"-2" }}{% endif %}</td>
+                        <td class="text-end {% if ln.variance and ln.variance < 0 %}text-danger fw-semibold{% elif ln.variance and ln.variance > 0 %}text-success fw-semibold{% endif %}">
+                            {% if ln.variance is None %}<span class="text-muted">—</span>{% else %}{{ ln.variance|floatformat:"-2" }}{% endif %}
+                        </td>
+                        <td class="text-end {% if ln.variance_lyd < 0 %}text-danger{% elif ln.variance_lyd > 0 %}text-success{% endif %}">{{ ln.variance_lyd|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if take.notes %}<p class="text-muted mt-3 mb-0"><strong>{{ DLUX_STRINGS.label_stocktake_notes|default:"Notes" }}:</strong> {{ take.notes }}</p>{% endif %}
+</div>
+{% endblock %}

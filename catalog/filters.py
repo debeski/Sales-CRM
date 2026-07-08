@@ -1,7 +1,7 @@
 import django_filters
 from django.db.models import Q
 
-from .models import Category, Product, Service, StockMovement
+from .models import Category, Product, Service, StockMovement, StockTake
 
 
 class CategoryFilter(django_filters.FilterSet):
@@ -89,3 +89,24 @@ class StockMovementFilter(django_filters.FilterSet):
         if not value:
             return queryset
         return queryset.filter(Q(reference__icontains=value) | Q(reason__icontains=value))
+
+
+class StockTakeFilter(django_filters.FilterSet):
+    keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [
+            {"name": "keyword", "placeholder_key": "search_placeholder"},
+            "status",
+        ],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
+    class Meta:
+        model = StockTake
+        fields = ["keyword", "status"]
+
+    def filter_keyword(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(Q(number__icontains=value) | Q(notes__icontains=value))

@@ -152,6 +152,12 @@
                     {% if invoice.customer_phone %}<p class="mb-1 text-muted"><i class="bi bi-telephone me-1"></i>{{ invoice.customer_phone }}</p>{% endif %}
                     {% if invoice.customer_address %}<p class="mb-0 text-muted"><i class="bi bi-geo-alt me-1"></i>{{ invoice.customer_address }}</p>{% endif %}
                     {% if invoice.notes %}<hr><p class="mb-0">{{ invoice.notes|linebreaksbr }}</p>{% endif %}
+                    {% if invoice.attachment %}
+                    <hr>
+                    <a href="{{ invoice.attachment.url }}" target="_blank" rel="noopener" class="text-decoration-none">
+                        <i class="bi bi-paperclip me-1"></i>{{ DLUX_STRINGS.label_invoice_attachment|default:"Attachment" }}
+                    </a>
+                    {% endif %}
                 </div>
             </div>
         </div>

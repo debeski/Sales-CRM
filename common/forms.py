@@ -1,8 +1,52 @@
 """Shared form helpers."""
+from crispy_forms.helper import FormHelper
+from crispy_forms.layout import Column, Field, Layout, Row
 from django import forms
 
 from dlux.translations import get_current_language_code, get_strings
 from dlux.utils import translate_choices
+
+# Bootstrap column class per number of fields sharing a row.
+_GRID_COL = {1: "col-12", 2: "col-md-6", 3: "col-md-4", 4: "col-md-3"}
+
+
+def build_grid_helper(form, rows):
+    """Give a modal ModelForm a multi-column crispy layout so short fields share
+    a row instead of each taking a full row.
+
+    The dlux ``DynamicModalManagerView`` renders ``{% crispy form %}`` but attaches
+    **no** helper/layout, so without this crispy falls back to one field per row.
+    A defined helper is honored by the template; we deliberately add no submit
+    input, so dlux's own icon Save/Cancel buttons still render.
+
+    ``rows`` is a list where each item is a tuple of field names (share one
+    Bootstrap row) or a single field name (full width). Names absent from the
+    form (e.g. a permission-gated field) are dropped and empty rows removed; any
+    field not mentioned is appended full-width so nothing is ever lost.
+    """
+    helper = FormHelper()
+    helper.form_tag = False       # the modal template provides <form> + csrf
+    helper.disable_csrf = True
+    components = []
+    placed = set()
+    for row in rows:
+        names = (row,) if isinstance(row, str) else tuple(row)
+        placed.update(names)
+        present = [n for n in names if n in form.fields]
+        if not present:
+            continue
+        css = _GRID_COL.get(len(present), "col-md-6")
+        components.append(Row(*[Column(n, css_class=css) for n in present]))
+    for name in form.fields:
+        if name not in placed:
+            # Hidden fields render as a bare input (no empty grid row).
+            if isinstance(form.fields[name].widget, forms.HiddenInput):
+                components.append(Field(name))
+            else:
+                components.append(Row(Column(name, css_class="col-12")))
+    helper.layout = Layout(*components)
+    form.helper = helper
+    return helper
 
 
 def translate_choice_fields(form, request=None):

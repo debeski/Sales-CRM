@@ -16,13 +16,14 @@
         </span>
     </div>
 
-    <form method="post" novalidate>
+    <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
 
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_customer_details }}</div>
             <div class="card-body">
-                {{ form|crispy }}
+                {# {% crispy %} TAG, not the |crispy filter — the filter drops form.helper (the multi-column grid). #}
+                {% crispy form %}
                 {# Suggestions for the customer combobox (one search-and-add field). #}
                 <datalist id="customer-datalist">
                     {% for c in customers %}

@@ -1,11 +1,33 @@
 import django_tables2 as tables
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from dlux.tables import DluxTable
 
 from common.i18n import t
 
-from .models import Category, Product, Service, StockMovement
+from django.urls import reverse
+
+from .models import Category, Product, Service, StockMovement, StockTake
+
+_STOCKTAKE_BADGE = {
+    "open": "bg-warning text-dark",
+    "applied": "bg-success",
+    "cancelled": "bg-secondary",
+}
+
+
+def _render_thumb(image):
+    """A small square thumbnail for a list row, or a neutral placeholder icon."""
+    if image:
+        return format_html(
+            '<img src="{}" alt="" class="rounded border" '
+            'style="width:38px;height:38px;object-fit:cover">',
+            image.url,
+        )
+    # Static markup (no interpolation) — mark_safe, since Django 6's format_html
+    # requires a placeholder arg.
+    return mark_safe('<span class="text-muted"><i class="bi bi-image"></i></span>')
 
 
 def _fmt_lyd(value):
@@ -22,6 +44,7 @@ class CategoryTable(DluxTable):
 
 
 class ProductTable(DluxTable):
+    image = tables.Column(verbose_name="", orderable=False)
     price_lyd = tables.Column(
         empty_values=(), verbose_name="Price (LYD)", orderable=False
     )
@@ -29,8 +52,11 @@ class ProductTable(DluxTable):
 
     class Meta(DluxTable.Meta):
         model = Product
-        fields = ("name", "sku", "barcode", "category", "unit", "stock_qty", "price_lyd", "is_active")
+        fields = ("image", "name", "sku", "barcode", "category", "unit", "stock_qty", "price_lyd", "is_active")
         dlux_actions = True
+
+    def render_image(self, record):
+        return _render_thumb(record.image)
 
     def render_price_lyd(self, record):
         return _fmt_lyd(record.selling_price_lyd())
@@ -48,12 +74,16 @@ class ProductTable(DluxTable):
 
 
 class ServiceTable(DluxTable):
+    image = tables.Column(verbose_name="", orderable=False)
     price_lyd = tables.Column(empty_values=(), verbose_name="Price (LYD)", orderable=False)
 
     class Meta(DluxTable.Meta):
         model = Service
-        fields = ("name", "service_type", "price_lyd", "is_active")
+        fields = ("image", "name", "service_type", "price_lyd", "is_active")
         dlux_actions = True
+
+    def render_image(self, record):
+        return _render_thumb(record.image)
 
     def render_price_lyd(self, record):
         price = record.selling_price_lyd()
@@ -71,3 +101,27 @@ class StockMovementTable(DluxTable):
 
     def render_movement_type(self, record):
         return t(f"mtype_{record.movement_type}", record.get_movement_type_display())
+
+
+class StockTakeTable(DluxTable):
+    number = tables.Column(verbose_name="Count No.")
+    status = tables.Column(verbose_name="Status")
+
+    class Meta(DluxTable.Meta):
+        model = StockTake
+        fields = ("number", "count_date", "status", "created_by", "created_at")
+        dlux_actions = False  # full-page count/detail flow, not modal CRUD
+
+    def render_number(self, record):
+        return format_html(
+            '<a href="{}" class="fw-semibold text-decoration-none">{}</a>',
+            reverse("catalog:stock_take_detail", args=[record.pk]),
+            record.number or "—",
+        )
+
+    def render_status(self, record):
+        return format_html(
+            '<span class="badge rounded-pill {}">{}</span>',
+            _STOCKTAKE_BADGE.get(record.status, "bg-secondary"),
+            t(f"stocktake_status_{record.status}", record.get_status_display()),
+        )

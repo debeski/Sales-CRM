@@ -54,7 +54,8 @@ MANAGER_PERMS = [
     # Invoices — full lifecycle + cross-rep visibility + reassignment
     "sales.view_invoice", "sales.add_invoice", "sales.change_invoice",
     "sales.delete_invoice", "sales.issue_invoice", "sales.cancel_invoice",
-    "sales.view_sales_report", "sales.view_all_invoice", "sales.assign_salesperson",
+    "sales.view_sales_report", "sales.view_financial_report",
+    "sales.view_all_invoice", "sales.assign_salesperson",
     # Customers (all reps' books)
     "sales.view_customer", "sales.add_customer", "sales.change_customer",
     "sales.delete_customer", "sales.view_all_customer",
@@ -68,6 +69,10 @@ MANAGER_PERMS = [
     "catalog.view_product", "catalog.add_product", "catalog.change_product",
     "catalog.view_service", "catalog.add_service", "catalog.change_service",
     "catalog.view_category", "catalog.add_category", "catalog.change_category",
+    # Inventory: stock movements, physical counts (stock takes) + valuation
+    "catalog.view_stockmovement", "catalog.add_stockmovement",
+    "catalog.view_stocktake", "catalog.add_stocktake", "catalog.change_stocktake",
+    "catalog.apply_stocktake", "catalog.view_inventory_valuation",
     # Finance — rate + cash reconciliation
     "finance.view_exchangerate", "finance.add_exchangerate", "finance.change_exchangerate",
     "finance.view_cashdeposit", "finance.add_cashdeposit", "finance.change_cashdeposit",

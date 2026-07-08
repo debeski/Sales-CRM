@@ -29,7 +29,14 @@ from finance.services import (
 from .filters import CustomerFilter, DeliveryFilter, InvoiceFilter, PaymentFilter
 from .forms import CustomerForm, InvoiceForm, InvoiceItemFormSet, PaymentForm
 from .models import Customer, Delivery, Invoice, Payment
-from .reports import build_sales_report, build_sales_report_xlsx, parse_window
+from .reports import (
+    available_fiscal_years,
+    build_financial_report,
+    build_sales_report,
+    build_sales_report_xlsx,
+    fiscal_year_window,
+    parse_window,
+)
 from .services import cancel_invoice, issue_invoice
 from .tables import CustomerTable, DeliveryTable, InvoiceTable, PaymentTable
 
@@ -91,9 +98,11 @@ def _apply_item_price(item, invoice):
         if item.unit_price_lyd in (None, ""):
             item.unit_price_lyd = item.product.selling_price_lyd(invoice.exchange_rate) or Decimal("0")
         item.unit_price_usd = item.product.effective_price_usd
+        item.unit_cost_usd = item.product.cost_usd  # freeze cost for exact COGS
     elif item.service_id:
         item.kind = item.KIND_SERVICE
         item.product = None
+        item.unit_cost_usd = None  # services carry no goods cost
         if item.unit_price_lyd in (None, ""):
             item.unit_price_lyd = item.service.selling_price_lyd(invoice.exchange_rate) or Decimal("0")
         item.unit_price_usd = item.service.price_usd
@@ -207,7 +216,7 @@ class InvoiceCreateView(_InvoiceEditorView):
         return render(request, self.template_name, self._context(request, form, formset))
 
     def post(self, request):
-        form = InvoiceForm(request.POST, user=request.user)
+        form = InvoiceForm(request.POST, request.FILES, user=request.user)
         formset = InvoiceItemFormSet(request.POST)
         if form.is_valid() and formset.is_valid():
             invoice = self._save(request, form, formset)
@@ -237,7 +246,7 @@ class InvoiceUpdateView(_InvoiceEditorView):
         if not invoice.is_editable:
             messages.warning(request, _("Only draft invoices can be edited."))
             return redirect("sales:invoice_detail", pk=invoice.pk)
-        form = InvoiceForm(request.POST, instance=invoice, user=request.user)
+        form = InvoiceForm(request.POST, request.FILES, instance=invoice, user=request.user)
         formset = InvoiceItemFormSet(request.POST, instance=invoice)
         if form.is_valid() and formset.is_valid():
             invoice = self._save(request, form, formset, invoice)
@@ -463,6 +472,30 @@ class SalesReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView)
         ctx["report"] = build_sales_report(date_from, date_to, self.request.user)
         ctx["date_from"] = date_from
         ctx["date_to"] = date_to
+        return ctx
+
+
+class FinancialReportView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    """Whole-store fiscal-year P&L (owner/manager). Not row-scoped — its own
+    permission gates it (COGS / margins / capital-in-stock are sensitive)."""
+
+    permission_required = "sales.view_financial_report"
+    raise_exception = True
+    template_name = "sales/financial_report.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        years = available_fiscal_years()
+        try:
+            year = int(self.request.GET.get("year", ""))
+        except (TypeError, ValueError):
+            year = years[0]
+        if year not in years:
+            year = years[0]
+        date_from, date_to = fiscal_year_window(year)
+        ctx["report"] = build_financial_report(date_from, date_to)
+        ctx["year"] = year
+        ctx["years"] = years
         return ctx
 
 

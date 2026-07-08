@@ -54,6 +54,7 @@ permission sets in [`sales/management/commands/seed_roles.py`](../sales/manageme
 | `sales.issue_invoice` | Invoice | Finalize a draft (draws down stock) |
 | `sales.cancel_invoice` | Invoice | Cancel an invoice (restores stock) |
 | `sales.view_sales_report` | Invoice | View sales reports + XLSX export |
+| `sales.view_financial_report` | Invoice | View the whole-store fiscal-year P&L (not row-scoped) |
 | `sales.view_all_invoice` | Invoice | See every rep's invoices, not just own |
 | `sales.assign_salesperson` | Invoice | Reassign an invoice's salesperson |
 | `sales.view_all_customer` | Customer | See every rep's customers |
@@ -62,6 +63,12 @@ permission sets in [`sales/management/commands/seed_roles.py`](../sales/manageme
 | `sales.assign_delivery` | Delivery | Assign deliveries to couriers |
 | `finance.confirm_cashdeposit` | CashDeposit | Confirm / reject deposits |
 | `finance.view_all_cashdeposit` | CashDeposit | See every staffer's deposits |
+| `catalog.apply_stocktake` | StockTake | Post the adjustments from a physical count |
+| `catalog.view_inventory_valuation` | StockTake | View the inventory valuation report |
+
+Inventory features (stock movements, stock takes, valuation) are **not row-scoped** —
+they're shared management data gated purely by these permissions; the Sales Manager
+group holds them, reps/couriers don't.
 
 Standard `view/add/change/delete` permissions exist for every model. Reports and
 the dashboard's sales figures are additionally row-scoped by the viewer.

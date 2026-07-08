@@ -35,7 +35,9 @@ derived property and therefore not one of the model's stored fields.
         <div class="col-md-6 col-lg-4">
             <div class="mb-3">
                 <div class="info-label text-muted small fw-bold text-uppercase tracking-wider mb-1">{{ field.label }}</div>
-                <div class="info-value text-dark fw-semibold">{{ field.value }}</div>
+                <div class="info-value text-dark fw-semibold">
+                    {% if field.is_html %}{{ field.value|safe }}{% else %}{{ field.value }}{% endif %}
+                </div>
             </div>
         </div>
     {% endfor %}

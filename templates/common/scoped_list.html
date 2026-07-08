@@ -20,6 +20,8 @@ Create / edit / view / delete are handled by the DjangoLux dynamic modal manager
             <h1 class="h3 mb-1">{{ page_title }}</h1>
             {% if page_subtitle %}<p class="text-muted mb-0">{{ page_subtitle }}</p>{% endif %}
         </div>
+        <div class="d-flex flex-wrap gap-2">
+        {% block list_actions %}
         {% if add_modal_url %}
         <button
             type="button"
@@ -30,6 +32,8 @@ Create / edit / view / delete are handled by the DjangoLux dynamic modal manager
             <i class="bi bi-plus-lg me-1"></i>{{ add_label|default:"Add" }}
         </button>
         {% endif %}
+        {% endblock %}
+        </div>
     </div>
 
     {% if filter %}

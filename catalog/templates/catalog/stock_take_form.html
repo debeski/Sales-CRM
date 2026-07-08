@@ -1,0 +1,58 @@
+{% extends "dlux/base.html" %}
+{% block title %}{{ DLUX_STRINGS.ui_new_stock_take|default:"New Stock Take" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h1 class="h3 mb-0">{{ DLUX_STRINGS.ui_new_stock_take|default:"New Stock Take" }}</h1>
+        <a href="{% url 'catalog:stock_take_list' %}" class="btn btn-outline-secondary rounded-pill">
+            <i class="bi bi-x-lg me-1"></i>{{ DLUX_STRINGS.btn_cancel|default:"Cancel" }}
+        </a>
+    </div>
+
+    <p class="text-muted">{{ DLUX_STRINGS.ui_stock_take_help|default:"Enter the quantity you physically counted for each item. Leave blank to skip. Adjustments are posted later, from the count's page." }}</p>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>{{ DLUX_STRINGS.label_product_name|default:"Name" }}</th>
+                            <th>{{ DLUX_STRINGS.label_product_sku|default:"SKU" }}</th>
+                            <th class="text-end">{{ DLUX_STRINGS.ui_system_qty|default:"System" }}</th>
+                            <th class="text-end" style="width:160px">{{ DLUX_STRINGS.ui_counted_qty|default:"Counted" }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in products %}
+                        <tr>
+                            <td>{{ p.name }}</td>
+                            <td class="text-muted">{{ p.sku }}</td>
+                            <td class="text-end text-muted">{{ p.stock_qty|floatformat:"-2" }}</td>
+                            <td>
+                                <input type="number" step="0.01" min="0" name="count_{{ p.pk }}"
+                                       class="form-control text-end" inputmode="decimal"
+                                       placeholder="{{ p.stock_qty|floatformat:'-2' }}">
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted py-4">{{ DLUX_STRINGS.ui_no_tracked_products|default:"No stock-tracked products to count." }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">{{ DLUX_STRINGS.label_stocktake_notes|default:"Notes" }}</label>
+            <textarea name="notes" class="form-control" rows="2"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary rounded-pill">
+            <i class="bi bi-save me-1"></i>{{ DLUX_STRINGS.btn_save|default:"Save" }}
+        </button>
+    </form>
+</div>
+{% endblock %}
