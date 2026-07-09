@@ -49,6 +49,6 @@ Create / edit / view / delete are handled by the DjangoLux dynamic modal manager
     {{ block.super }}
     <script src="{% static 'common/js/scoped_crud.js' %}" nonce="{{ request.csp_nonce }}" defer></script>
     {% for script in extra_scripts %}
-        <script src="{% static script %}" nonce="{{ request.csp_nonce }}" defer></script>
+        <script src="{% static script %}?v=20260709a" nonce="{{ request.csp_nonce }}" defer></script>
     {% endfor %}
 {% endblock %}

@@ -24,6 +24,10 @@ only their own records but a manager the whole store. See
 | `Delivery` | `assigned_to`, `created_by` | `sales.view_all_delivery` |
 | `finance.CashDeposit` | `created_by` | `finance.view_all_cashdeposit` |
 
+Payment receipt printing (`/sales/payments/<id>/receipt/`) uses the same
+`sales.view_payment` permission and `Payment` ownership row filter as the
+payments list.
+
 ## Roles
 
 | Role | Who | Group | Visibility |
@@ -63,10 +67,19 @@ permission sets in [`sales/management/commands/seed_roles.py`](../sales/manageme
 | `sales.assign_delivery` | Delivery | Assign deliveries to couriers |
 | `finance.confirm_cashdeposit` | CashDeposit | Confirm / reject deposits |
 | `finance.view_all_cashdeposit` | CashDeposit | See every staffer's deposits |
+| `catalog.view_supplier` / `add_supplier` / `change_supplier` | Supplier | Manage the supplier list used by purchase invoices |
+| `catalog.view_purchaseinvoice` / `add_purchaseinvoice` / `change_purchaseinvoice` | PurchaseInvoice | View and post inbound stock invoices |
 | `catalog.apply_stocktake` | StockTake | Post the adjustments from a physical count |
 | `catalog.view_inventory_valuation` | StockTake | View the inventory valuation report |
 
-Inventory features (stock movements, stock takes, valuation) are **not row-scoped** —
+The one-time **Opening Stock** bulk intake has no permission of its own — it
+reuses `catalog.add_product` + `catalog.change_product` + `catalog.add_stockmovement`
+(it creates/reuses products and posts Stock In movements). Purchase invoices are
+separate documents gated by `catalog.add_purchaseinvoice` plus product/stock
+permissions because they create or update products and post stock-in movements.
+
+Inventory features (suppliers, purchase invoices, stock movements, stock takes,
+opening stock, valuation) are **not row-scoped** —
 they're shared management data gated purely by these permissions; the Sales Manager
 group holds them, reps/couriers don't.
 

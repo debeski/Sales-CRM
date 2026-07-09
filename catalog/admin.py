@@ -1,12 +1,18 @@
 from django.contrib import admin
 
-from .models import Category, Product, Service, StockMovement
+from .models import Category, Product, PurchaseInvoice, PurchaseInvoiceLine, Service, StockMovement, Supplier
 
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ("name", "is_active")
     search_fields = ("name",)
+
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ("name", "phone", "is_active")
+    search_fields = ("name", "phone")
 
 
 @admin.register(Product)
@@ -26,6 +32,20 @@ class ServiceAdmin(admin.ModelAdmin):
 
 @admin.register(StockMovement)
 class StockMovementAdmin(admin.ModelAdmin):
-    list_display = ("product", "movement_type", "quantity", "reference", "created_at")
+    list_display = ("product", "movement_type", "quantity", "reference", "purchase_invoice", "created_at")
     list_filter = ("movement_type",)
-    search_fields = ("product__name", "reference")
+    search_fields = ("product__name", "reference", "purchase_invoice__number")
+
+
+class PurchaseInvoiceLineInline(admin.TabularInline):
+    model = PurchaseInvoiceLine
+    extra = 0
+
+
+@admin.register(PurchaseInvoice)
+class PurchaseInvoiceAdmin(admin.ModelAdmin):
+    list_display = ("number", "display_supplier", "invoice_date", "status", "total_usd", "total_lyd")
+    list_filter = ("status", "invoice_date")
+    search_fields = ("number", "supplier_name", "supplier__name")
+    readonly_fields = ("number", "total_usd", "total_lyd", "posted_at")
+    inlines = [PurchaseInvoiceLineInline]

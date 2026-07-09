@@ -75,7 +75,11 @@ class PaymentFilter(django_filters.FilterSet):
     def filter_keyword(self, queryset, name, value):
         if not value:
             return queryset
-        return queryset.filter(Q(invoice__number__icontains=value) | Q(notes__icontains=value))
+        return queryset.filter(
+            Q(receipt_number__icontains=value)
+            | Q(invoice__number__icontains=value)
+            | Q(notes__icontains=value)
+        )
 
 
 class DeliveryFilter(django_filters.FilterSet):

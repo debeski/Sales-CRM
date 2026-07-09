@@ -1,6 +1,11 @@
+import json
+from datetime import timedelta
 from decimal import Decimal
 
 from django.test import SimpleTestCase, TestCase
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils import timezone
 
 from catalog.models import Category, Product, Service
 from finance.models import ExchangeRate
@@ -28,32 +33,6 @@ class InvoiceFormLayoutTests(TestCase):
         for f in ("customer_name", "customer_phone", "customer_address",
                   "invoice_date", "discount_percent", "discount_amount", "notes"):
             self.assertIn(f'name="{f}"', html, f"header field {f} missing")
-
-    def test_optional_attachment_dlux_widget(self):
-        import tempfile
-
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        from django.test import override_settings
-
-        from sales.forms import InvoiceForm
-
-        form = InvoiceForm(user=None)
-        self.assertEqual(form.fields["attachment"].widget.template_name, "dlux/forms/file_input.html")
-        self.assertFalse(form.fields["attachment"].required)  # optional
-        self.assertTrue(form.is_multipart())
-
-        with override_settings(MEDIA_ROOT=tempfile.mkdtemp()):
-            bound = InvoiceForm(
-                data={"customer_name": "X", "invoice_date": "2026-07-08",
-                      "discount_percent": "0", "discount_amount": "0"},
-                files={"attachment": SimpleUploadedFile("inv.pdf", b"%PDF-1.4 x", content_type="application/pdf")},
-                user=None,
-            )
-            self.assertTrue(bound.is_valid(), bound.errors)
-            inv = bound.save(commit=False)
-            inv.exchange_rate = Decimal("5.00")
-            inv.save()
-            self.assertTrue(inv.attachment.name.startswith("invoices/"))
 
 
 class SalesConfigScaffoldTests(SimpleTestCase):
@@ -246,8 +225,209 @@ class PaymentFormTests(TestCase):
         payment.invoice = inv
         payment.save()
         self.assertIsNotNone(payment.paid_at)  # model default applied
+        self.assertRegex(payment.receipt_number, r"^RCT-\d{6}$")
         inv.refresh_from_db()
         self.assertEqual(inv.amount_paid, Decimal("50.00"))
+
+    def test_payment_receipt_numbers_are_unique(self):
+        inv = Invoice.objects.create(customer_name="X", status=Invoice.STATUS_ISSUED)
+        p1 = Payment.objects.create(invoice=inv, amount=Decimal("10"), method="cash")
+        p2 = Payment.objects.create(invoice=inv, amount=Decimal("15"), method="cash")
+        self.assertNotEqual(p1.receipt_number, p2.receipt_number)
+        self.assertTrue(p1.receipt_number.startswith("RCT-"))
+
+
+class PaymentReceiptViewTests(TestCase):
+    def test_receipt_view_renders_payment_and_balance_after_that_receipt(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.test import RequestFactory
+
+        from sales.views import PaymentReceiptView
+
+        def attach_session(request):
+            SessionMiddleware(lambda req: None).process_request(request)
+            request.session.save()
+            return request
+
+        user = get_user_model().objects.create_superuser("receipt_admin", "r@example.com", "x")
+        inv = Invoice.objects.create(
+            customer_name="Buyer", status=Invoice.STATUS_ISSUED, total_lyd=Decimal("100.00")
+        )
+        first = Payment.objects.create(
+            invoice=inv,
+            amount=Decimal("30.00"),
+            method="cash",
+            paid_at=timezone.now() - timedelta(hours=1),
+        )
+        second = Payment.objects.create(
+            invoice=inv,
+            amount=Decimal("20.00"),
+            method="bank_transfer",
+            paid_at=timezone.now(),
+        )
+
+        rf = RequestFactory()
+        req = attach_session(rf.get(f"/sales/payments/{first.pk}/receipt/"))
+        req.user = user
+        resp = PaymentReceiptView.as_view()(req, pk=first.pk)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context_data["paid_before_receipt"], Decimal("0.00"))
+        self.assertEqual(resp.context_data["balance_after_receipt"], Decimal("70.00"))
+        resp.render()
+        html = resp.content.decode()
+        self.assertIn("Payment Receipt", html)
+        self.assertIn(first.receipt_number, html)
+
+        req = attach_session(rf.get(f"/sales/payments/{second.pk}/receipt/"))
+        req.user = user
+        resp = PaymentReceiptView.as_view()(req, pk=second.pk)
+        self.assertEqual(resp.context_data["paid_before_receipt"], Decimal("30.00"))
+        self.assertEqual(resp.context_data["balance_after_receipt"], Decimal("50.00"))
+
+    def test_invoice_and_receipt_prints_use_system_logo_url(self):
+        from dlux.translations import get_strings
+
+        logo_url = "/media/dlux/branding/official-logo.png"
+        app_config = {
+            "identity": {"display_name": "Switch"},
+            "logo_url": logo_url,
+        }
+        strings = get_strings("en")
+        inv = Invoice.objects.create(
+            customer_name="Buyer",
+            status=Invoice.STATUS_ISSUED,
+            total_lyd=Decimal("100.00"),
+        )
+        payment = Payment.objects.create(invoice=inv, amount=Decimal("40.00"), method="cash")
+
+        invoice_html = render_to_string(
+            "sales/invoice_print.html",
+            {
+                "APP_CONFIG": app_config,
+                "DLUX_STRINGS": strings,
+                "invoice": inv,
+                "items": [],
+                "payments": [payment],
+                "doc_lang": "en",
+                "is_rtl": False,
+            },
+        )
+        receipt_html = render_to_string(
+            "sales/payment_receipt.html",
+            {
+                "APP_CONFIG": app_config,
+                "DLUX_STRINGS": strings,
+                "invoice": inv,
+                "payment": payment,
+                "paid_before_receipt": Decimal("0.00"),
+                "balance_after_receipt": Decimal("60.00"),
+                "doc_lang": "en",
+                "is_rtl": False,
+            },
+        )
+
+        self.assertIn(f'src="{logo_url}"', invoice_html)
+        self.assertIn(f'src="{logo_url}"', receipt_html)
+
+
+class SalesContextMenuTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from django.test import RequestFactory
+
+        self.user = get_user_model().objects.create_superuser("menu_admin", "m@example.com", "x")
+        self.rf = RequestFactory()
+
+    def _request(self, path="/"):
+        from django.contrib.sessions.middleware import SessionMiddleware
+
+        request = self.rf.get(path)
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.session.save()
+        request.user = self.user
+        return request
+
+    def _row_actions(self, table, record):
+        return json.loads(table.row_attrs["data-dlux-actions"](record))
+
+    def test_invoice_table_uses_dlux_context_menu_for_full_page_actions(self):
+        from sales.tables import InvoiceTable
+
+        invoice = Invoice.objects.create(customer_name="Buyer", status=Invoice.STATUS_DRAFT)
+        table = InvoiceTable([invoice], request=self._request("/sales/invoices/"))
+
+        self.assertEqual(table.render_number(invoice), invoice.number)
+        actions = self._row_actions(table, invoice)
+        urls = {action.get("url") for action in actions}
+        form_urls = {action.get("url") for action in actions if action.get("type") == "form"}
+        print_action = next(action for action in actions if action.get("url") == reverse("sales:invoice_print", args=[invoice.pk]))
+
+        self.assertIn(reverse("sales:invoice_detail", args=[invoice.pk]), urls)
+        self.assertIn(reverse("sales:invoice_print", args=[invoice.pk]), urls)
+        self.assertIn(reverse("sales:invoice_edit", args=[invoice.pk]), urls)
+        self.assertIn(reverse("sales:invoice_issue", args=[invoice.pk]), form_urls)
+        self.assertIn(reverse("sales:invoice_cancel", args=[invoice.pk]), form_urls)
+        self.assertEqual(print_action["target"], "_blank")
+        self.assertTrue(actions[0]["dblclick"])
+
+    def test_invoice_list_exposes_hidden_csrf_for_context_menu_form_actions(self):
+        from sales.views import InvoiceListView
+
+        Invoice.objects.create(customer_name="Buyer", status=Invoice.STATUS_DRAFT)
+        request = self._request(reverse("sales:invoice_list"))
+        response = InvoiceListView.as_view()(request)
+        self.assertEqual(response.status_code, 200)
+        response.render()
+        html = response.content.decode()
+
+        self.assertIn('name="csrfmiddlewaretoken"', html)
+        self.assertIn("data-dlux-row-action-csrf", html)
+
+    def test_payment_table_uses_dlux_context_menu_for_invoice_and_receipt(self):
+        from sales.tables import PaymentTable
+
+        invoice = Invoice.objects.create(
+            customer_name="Buyer",
+            status=Invoice.STATUS_ISSUED,
+            total_lyd=Decimal("100.00"),
+        )
+        payment = Payment.objects.create(invoice=invoice, amount=Decimal("40.00"), method="cash")
+        table = PaymentTable([payment], request=self._request("/sales/payments/"))
+
+        self.assertEqual(table.render_receipt_number(payment), payment.receipt_number)
+        self.assertEqual(table.render_invoice(payment), invoice.number)
+        actions = self._row_actions(table, payment)
+        urls = {action.get("url") for action in actions}
+        receipt_action = next(action for action in actions if action.get("url") == reverse("sales:payment_receipt", args=[payment.pk]))
+
+        self.assertIn(reverse("sales:invoice_detail", args=[invoice.pk]), urls)
+        self.assertIn(reverse("sales:payment_receipt", args=[payment.pk]), urls)
+        self.assertEqual(receipt_action["target"], "_blank")
+        self.assertTrue(actions[0]["dblclick"])
+
+    def test_invoice_detail_payment_rows_offer_receipt_context_action(self):
+        from sales.views import InvoiceDetailView
+
+        invoice = Invoice.objects.create(
+            customer_name="Buyer",
+            status=Invoice.STATUS_ISSUED,
+            total_lyd=Decimal("100.00"),
+        )
+        payment = Payment.objects.create(invoice=invoice, amount=Decimal("40.00"), method="cash")
+        receipt_url = reverse("sales:payment_receipt", args=[payment.pk])
+
+        request = self._request(reverse("sales:invoice_detail", args=[invoice.pk]))
+        response = InvoiceDetailView.as_view()(request, pk=invoice.pk)
+        self.assertEqual(response.status_code, 200)
+        response.render()
+        html = response.content.decode()
+
+        self.assertIn('data-dlux-context="true"', html)
+        self.assertIn(receipt_url, html)
+        self.assertIn('"label":"Print Receipt"', html)
+        self.assertIn('"target":"_blank"', html)
+        self.assertNotIn(f'<a href="{receipt_url}"', html)
 
 
 class DepositBatchTests(TestCase):

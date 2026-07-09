@@ -19,8 +19,14 @@ from django.http import Http404
 from django.test import RequestFactory, TestCase
 
 from common.access import apply_ownership
-from sales.models import Customer, Delivery, Invoice
-from sales.views import DashboardView, DeliveryListView, InvoiceDetailView, InvoiceListView
+from sales.models import Customer, Delivery, Invoice, Payment
+from sales.views import (
+    DashboardView,
+    DeliveryListView,
+    InvoiceDetailView,
+    InvoiceListView,
+    PaymentReceiptView,
+)
 
 User = get_user_model()
 rf = RequestFactory()
@@ -90,6 +96,44 @@ class InvoiceListVisibilityTests(TestCase):
         other = Invoice.objects.get(number="INV-B")
         with self.assertRaises(Http404):
             _get(InvoiceDetailView, self.a, f"/sales/{other.pk}/", pk=other.pk)
+
+
+class PaymentReceiptVisibilityTests(TestCase):
+    def setUp(self):
+        self.a = User.objects.create_user("rep_a", password="x")
+        self.a.user_permissions.add(_perm("sales.view_payment"))
+        self.b = User.objects.create_user("rep_b", password="x")
+        self.b.user_permissions.add(_perm("sales.view_payment"))
+        self.invoice = Invoice.objects.create(
+            number="INV-A",
+            exchange_rate=Decimal("6.5"),
+            created_by=self.a,
+            salesperson=self.a,
+        )
+        self.payment = Payment.objects.create(
+            invoice=self.invoice,
+            amount=Decimal("50.00"),
+            created_by=self.a,
+        )
+
+    def test_rep_can_print_own_payment_receipt(self):
+        resp = _get(
+            PaymentReceiptView,
+            self.a,
+            f"/sales/payments/{self.payment.pk}/receipt/",
+            pk=self.payment.pk,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context_data["payment"], self.payment)
+
+    def test_rep_cannot_print_other_reps_payment_receipt(self):
+        with self.assertRaises(Http404):
+            _get(
+                PaymentReceiptView,
+                self.b,
+                f"/sales/payments/{self.payment.pk}/receipt/",
+                pk=self.payment.pk,
+            )
 
 
 class ModalOwnershipPatchTests(TestCase):

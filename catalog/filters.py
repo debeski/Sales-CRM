@@ -1,7 +1,7 @@
 import django_filters
 from django.db.models import Q
 
-from .models import Category, Product, Service, StockMovement, StockTake
+from .models import Category, Product, PurchaseInvoice, Service, StockMovement, StockTake, Supplier
 
 
 class CategoryFilter(django_filters.FilterSet):
@@ -21,6 +21,27 @@ class CategoryFilter(django_filters.FilterSet):
         if not value:
             return queryset
         return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
+
+
+class SupplierFilter(django_filters.FilterSet):
+    keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [{"name": "keyword", "placeholder_key": "search_placeholder"}],
+        "advanced_fields": [["is_active"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
+    class Meta:
+        model = Supplier
+        fields = ["keyword", "is_active"]
+
+    def filter_keyword(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value) | Q(phone__icontains=value) | Q(address__icontains=value)
+        )
 
 
 class ProductFilter(django_filters.FilterSet):
@@ -89,6 +110,32 @@ class StockMovementFilter(django_filters.FilterSet):
         if not value:
             return queryset
         return queryset.filter(Q(reference__icontains=value) | Q(reason__icontains=value))
+
+
+class PurchaseInvoiceFilter(django_filters.FilterSet):
+    keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [
+            {"name": "keyword", "placeholder_key": "search_placeholder"},
+            "status",
+        ],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
+    class Meta:
+        model = PurchaseInvoice
+        fields = ["keyword", "status"]
+
+    def filter_keyword(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(number__icontains=value)
+            | Q(supplier_name__icontains=value)
+            | Q(supplier__name__icontains=value)
+            | Q(notes__icontains=value)
+        )
 
 
 class StockTakeFilter(django_filters.FilterSet):

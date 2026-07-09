@@ -86,17 +86,18 @@
                 </div>
                 <div class="table-responsive">
                     <table class="table mb-0 align-middle">
-                        <thead class="table-light"><tr><th>{{ DLUX_STRINGS.ui_date }}</th><th>{{ DLUX_STRINGS.label_method }}</th><th class="text-end">{{ DLUX_STRINGS.label_amount }}</th><th>{{ DLUX_STRINGS.ui_by }}</th></tr></thead>
+                        <thead class="table-light"><tr><th>{{ DLUX_STRINGS.label_receipt_number }}</th><th>{{ DLUX_STRINGS.ui_date }}</th><th>{{ DLUX_STRINGS.label_method }}</th><th class="text-end">{{ DLUX_STRINGS.label_amount }}</th><th>{{ DLUX_STRINGS.ui_by }}</th></tr></thead>
                         <tbody>
                             {% for p in payments %}
-                            <tr>
+                            <tr{% if perms.sales.view_payment %} data-dlux-context="true" data-dlux-actions='[{"label":"{{ DLUX_STRINGS.ui_print_receipt|escapejs }}","icon":"bi bi-printer","type":"url","url":"{% url 'sales:payment_receipt' p.pk %}","target":"_blank","dblclick":true}]'{% endif %}>
+                                <td>{{ p.receipt_number }}</td>
                                 <td>{{ p.paid_at|date:"Y-m-d H:i" }}</td>
                                 <td>{{ p.method_label }}</td>
                                 <td class="text-end">{{ p.amount|floatformat:2 }}</td>
                                 <td>{{ p.created_by|default:"—" }}</td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="4" class="text-center text-muted py-3">{{ DLUX_STRINGS.ui_no_payments }}</td></tr>
+                            <tr><td colspan="5" class="text-center text-muted py-3">{{ DLUX_STRINGS.ui_no_payments }}</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -152,12 +153,6 @@
                     {% if invoice.customer_phone %}<p class="mb-1 text-muted"><i class="bi bi-telephone me-1"></i>{{ invoice.customer_phone }}</p>{% endif %}
                     {% if invoice.customer_address %}<p class="mb-0 text-muted"><i class="bi bi-geo-alt me-1"></i>{{ invoice.customer_address }}</p>{% endif %}
                     {% if invoice.notes %}<hr><p class="mb-0">{{ invoice.notes|linebreaksbr }}</p>{% endif %}
-                    {% if invoice.attachment %}
-                    <hr>
-                    <a href="{{ invoice.attachment.url }}" target="_blank" rel="noopener" class="text-decoration-none">
-                        <i class="bi bi-paperclip me-1"></i>{{ DLUX_STRINGS.label_invoice_attachment|default:"Attachment" }}
-                    </a>
-                    {% endif %}
                 </div>
             </div>
         </div>

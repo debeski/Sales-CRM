@@ -10,11 +10,14 @@
  *   [data-price-markup] Markup %                 (Product only)
  *   [data-price-usd]    Selling price (USD)
  *   [data-price-lyd]    Manual LYD price (override) + carries [data-usd-rate]
+ * Repeated grids can wrap each group in [data-price-sync-row] so calculations
+ * stay inside that row instead of the surrounding form.
  *
  * Sync rules (base = cost):
  *   edit markup  -> usd = cost * (1 + markup/100)
  *   edit usd     -> markup = (usd/cost - 1) * 100
- *   edit cost    -> usd = cost * (1 + markup/100)   (keep markup)
+ *   edit cost    -> if manual LYD is set, keep LYD fixed and recompute
+ *                   usd + markup; otherwise keep markup and recompute usd.
  *   edit LYD     -> treated as a deliberate override: usd = LYD / rate,
  *                   markup back-computed.
  *
@@ -44,6 +47,13 @@
             usd: form.querySelector("[data-price-usd]"),
             lyd: form.querySelector("[data-price-lyd]"),
         };
+    }
+
+    function scopeFor(target) {
+        return (
+            (target.closest && target.closest("[data-price-sync-row]")) ||
+            (target.closest && target.closest("form"))
+        );
     }
 
     function rateOf(f) {
@@ -90,6 +100,10 @@
 
     function fromCost(f) {
         var cost = num(f.cost), markup = num(f.markup), usd = num(f.usd);
+        if (f.lyd && f.lyd.value !== "") {
+            fromLyd(f);
+            return;
+        }
         if (f.usd && !isNaN(cost) && !isNaN(markup)) {
             // Keep the entered markup; the selling price moves with the cost.
             f.usd.value = round2(cost * (1 + markup / 100)).toFixed(2);
@@ -114,9 +128,9 @@
     }
 
     function handle(target) {
-        var form = target.closest && target.closest("form");
-        if (!form) return;
-        var f = fields(form);
+        var scope = scopeFor(target);
+        if (!scope) return;
+        var f = fields(scope);
         if (!f.usd && !f.lyd) return; // not a pricing form
         if (target === f.markup) fromMarkup(f);
         else if (target === f.usd) fromUsd(f);
@@ -134,8 +148,8 @@
     function initIn(root) {
         var lydFields = root.querySelectorAll ? root.querySelectorAll("[data-price-lyd]") : [];
         lydFields.forEach(function (lyd) {
-            var form = lyd.closest("form");
-            if (form) refreshLydPreview(fields(form));
+            var scope = scopeFor(lyd);
+            if (scope) refreshLydPreview(fields(scope));
         });
     }
 

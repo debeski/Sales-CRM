@@ -11,6 +11,7 @@ class InvoiceItemInline(admin.TabularInline):
 class PaymentInline(admin.TabularInline):
     model = Payment
     extra = 0
+    readonly_fields = ("receipt_number",)
 
 
 @admin.register(Customer)
@@ -30,6 +31,7 @@ class InvoiceAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ("invoice", "amount", "method", "paid_at", "created_by")
+    list_display = ("receipt_number", "invoice", "amount", "method", "paid_at", "created_by")
     list_filter = ("method",)
-    search_fields = ("invoice__number",)
+    search_fields = ("receipt_number", "invoice__number")
+    readonly_fields = ("receipt_number",)

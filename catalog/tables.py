@@ -8,7 +8,7 @@ from common.i18n import t
 
 from django.urls import reverse
 
-from .models import Category, Product, Service, StockMovement, StockTake
+from .models import Category, Product, PurchaseInvoice, Service, StockMovement, StockTake, Supplier
 
 _STOCKTAKE_BADGE = {
     "open": "bg-warning text-dark",
@@ -40,6 +40,13 @@ class CategoryTable(DluxTable):
     class Meta(DluxTable.Meta):
         model = Category
         fields = ("name", "is_active", "created_at")
+        dlux_actions = True
+
+
+class SupplierTable(DluxTable):
+    class Meta(DluxTable.Meta):
+        model = Supplier
+        fields = ("name", "phone", "address", "is_active", "created_at")
         dlux_actions = True
 
 
@@ -101,6 +108,58 @@ class StockMovementTable(DluxTable):
 
     def render_movement_type(self, record):
         return t(f"mtype_{record.movement_type}", record.get_movement_type_display())
+
+
+class PurchaseInvoiceTable(DluxTable):
+    number = tables.Column(verbose_name="Purchase Invoice No.")
+    supplier = tables.Column(empty_values=(), verbose_name="Supplier", orderable=False)
+    status = tables.Column(verbose_name="Status")
+    total_usd = tables.Column(verbose_name="Total (USD)")
+    total_lyd = tables.Column(verbose_name="Total (LYD)")
+
+    class Meta(DluxTable.Meta):
+        model = PurchaseInvoice
+        fields = ("number", "supplier", "invoice_date", "status", "total_usd", "total_lyd", "created_by", "created_at")
+        dlux_actions = True
+
+    def get_dlux_base_actions(self, record):
+        return [
+            {
+                "label": "ui_view_purchase_invoice",
+                "icon": "bi bi-eye",
+                "type": "url",
+                "url": reverse("catalog:purchase_invoice_detail", args=[record.pk]),
+                "dblclick": True,
+                "permissions": ["catalog.view_purchaseinvoice"],
+            },
+            {
+                "label": "ui_print_export",
+                "icon": "bi bi-printer",
+                "type": "url",
+                "url": reverse("catalog:purchase_invoice_print", args=[record.pk]),
+                "target": "_blank",
+                "permissions": ["catalog.view_purchaseinvoice"],
+            },
+        ]
+
+    def render_number(self, record):
+        return record.number or "—"
+
+    def render_supplier(self, record):
+        return record.display_supplier
+
+    def render_status(self, record):
+        return format_html(
+            '<span class="badge rounded-pill {}">{}</span>',
+            "bg-success" if record.status == PurchaseInvoice.STATUS_POSTED else "bg-secondary",
+            t(f"purchase_status_{record.status}", record.get_status_display()),
+        )
+
+    def render_total_usd(self, record):
+        return f"{record.total_usd:,.2f}"
+
+    def render_total_lyd(self, record):
+        return f"{record.total_lyd:,.2f}"
 
 
 class StockTakeTable(DluxTable):

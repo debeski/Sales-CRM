@@ -60,6 +60,25 @@ class Category(ScopedModel):
         return self.name
 
 
+class Supplier(ScopedModel):
+    """A stock supplier. Purchase invoices snapshot these fields so old
+    documents remain readable even if the supplier record changes later."""
+
+    name = models.CharField(max_length=200, verbose_name="Name")
+    phone = models.CharField(max_length=40, blank=True, db_index=True, verbose_name="Phone")
+    address = models.CharField(max_length=255, blank=True, verbose_name="Address")
+    notes = models.TextField(blank=True, verbose_name="Notes")
+    is_active = models.BooleanField(default=True, verbose_name="Active")
+
+    class Meta:
+        verbose_name = "Supplier"
+        verbose_name_plural = "Suppliers"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Product(ScopedModel):
     """A stock item. Priced in USD; sold in LYD via the live rate."""
 
@@ -258,11 +277,156 @@ class Service(ScopedModel):
         return {"extra_detail_fields": rows}
 
 
+class PurchaseInvoice(ScopedModel):
+    """Inbound stock invoice. Saving a completed purchase invoice creates
+    ``StockMovement`` rows for each line; the invoice is the procurement document
+    and the movements are the stock ledger audit trail."""
+
+    STATUS_POSTED = "posted"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = (
+        (STATUS_POSTED, "Posted"),
+        (STATUS_CANCELLED, "Cancelled"),
+    )
+
+    number = models.CharField(max_length=20, unique=True, blank=True, verbose_name="Purchase Invoice No.")
+    supplier = models.ForeignKey(
+        Supplier, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="purchase_invoices", verbose_name="Supplier",
+    )
+    supplier_name = models.CharField(max_length=200, blank=True, verbose_name="Supplier Name")
+    supplier_phone = models.CharField(max_length=40, blank=True, verbose_name="Supplier Phone")
+    supplier_address = models.CharField(max_length=255, blank=True, verbose_name="Supplier Address")
+    invoice_date = models.DateField(default=timezone.localdate, verbose_name="Invoice Date")
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=STATUS_POSTED, db_index=True,
+        verbose_name="Status",
+    )
+    exchange_rate = models.DecimalField(
+        max_digits=12, decimal_places=4, verbose_name="Exchange Rate (LYD/USD)"
+    )
+    attachment = models.FileField(
+        upload_to="purchase_invoices/", blank=True, verbose_name="Attachment"
+    )
+    notes = models.TextField(blank=True, verbose_name="Notes")
+    total_usd = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0.00"), editable=False,
+        verbose_name="Total (USD)",
+    )
+    total_lyd = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0.00"), editable=False,
+        verbose_name="Total (LYD)",
+    )
+    posted_at = models.DateTimeField(null=True, blank=True, editable=False, verbose_name="Posted At")
+
+    class Meta:
+        verbose_name = "Purchase Invoice"
+        verbose_name_plural = "Purchase Invoices"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"], name="catalog_pin_status_idx"),
+            models.Index(fields=["-invoice_date"], name="catalog_pin_date_idx"),
+        ]
+
+    def __str__(self):
+        return self.number or f"(purchase #{self.pk})"
+
+    def save(self, *args, **kwargs):
+        if self.exchange_rate is None:
+            self.exchange_rate = get_current_rate()
+        if self.status == self.STATUS_POSTED and self.posted_at is None:
+            self.posted_at = timezone.now()
+        super().save(*args, **kwargs)
+        if not self.number:
+            self.number = f"PINV-{self.pk:06d}"
+            super().save(update_fields=["number"])
+
+    @property
+    def display_supplier(self):
+        if self.supplier_id:
+            return self.supplier.name
+        return self.supplier_name or "—"
+
+    @property
+    def status_label(self):
+        from common.i18n import t
+        return t(f"purchase_status_{self.status}", self.get_status_display())
+
+    def recalc_totals(self, commit=True):
+        total_usd = sum((line.line_total_usd for line in self.lines.all()), Decimal("0.00"))
+        self.total_usd = total_usd.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+        self.total_lyd = usd_to_lyd(self.total_usd, self.exchange_rate)
+        if commit:
+            self.save(update_fields=["total_usd", "total_lyd", "updated_at"])
+
+
+class PurchaseInvoiceLine(models.Model):
+    """One product bought on a purchase invoice. Product/pricing fields are
+    snapshotted from the intake row so the purchase document remains historical."""
+
+    invoice = models.ForeignKey(PurchaseInvoice, on_delete=models.CASCADE, related_name="lines")
+    product = models.ForeignKey(
+        Product, on_delete=models.PROTECT, related_name="purchase_invoice_lines", verbose_name="Product"
+    )
+    category = models.ForeignKey(
+        Category, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="purchase_invoice_lines", verbose_name="Category",
+    )
+    description = models.CharField(max_length=200, verbose_name="Description")
+    unit = models.CharField(max_length=12, choices=Product.UNIT_CHOICES, default=Product.UNIT_PIECE, verbose_name="Unit")
+    barcode = models.CharField(max_length=64, blank=True, verbose_name="Barcode")
+    cost_usd = models.DecimalField(
+        max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0.00"))],
+        verbose_name="Import Cost (USD)",
+    )
+    markup_percent = models.DecimalField(
+        max_digits=6, decimal_places=2, default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Markup %",
+    )
+    price_usd = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Selling Price (USD)",
+    )
+    price_lyd_override = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))], verbose_name="Manual LYD Price",
+    )
+    quantity = models.DecimalField(
+        max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))],
+        verbose_name="Quantity",
+    )
+
+    class Meta:
+        verbose_name = "Purchase Invoice Line"
+        verbose_name_plural = "Purchase Invoice Lines"
+        default_permissions = ()
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.description} × {self.quantity:g}"
+
+    @property
+    def line_total_usd(self):
+        return ((self.quantity or Decimal("0")) * (self.cost_usd or Decimal("0"))).quantize(
+            TWO_PLACES, rounding=ROUND_HALF_UP
+        )
+
+    @property
+    def line_total_lyd(self):
+        return usd_to_lyd(self.line_total_usd, self.invoice.exchange_rate)
+
+    @property
+    def unit_label(self):
+        from common.i18n import t
+        return t(f"unit_{self.unit}", dict(Product.UNIT_CHOICES).get(self.unit, self.unit))
+
+
 class StockMovement(ScopedModel):
     """Append-style inventory ledger. Every change to ``Product.stock_qty`` is a row.
 
-    Referenced invoices are stored by their string number (``reference``) so the
-    catalog app stays independent of ``sales``.
+    Sales invoices stay decoupled via the string ``reference``. Purchase invoices
+    live in this app and also keep a nullable FK for easy drill-down from stock-in
+    movements.
     """
 
     TYPE_IN = "in"
@@ -286,6 +450,10 @@ class StockMovement(ScopedModel):
     )
     reason = models.CharField(max_length=200, blank=True, verbose_name="Reason")
     reference = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="Reference")
+    purchase_invoice = models.ForeignKey(
+        PurchaseInvoice, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="stock_movements", verbose_name="Purchase Invoice",
+    )
 
     class Meta:
         verbose_name = "Stock Movement"

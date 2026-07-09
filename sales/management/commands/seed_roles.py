@@ -69,10 +69,15 @@ MANAGER_PERMS = [
     "catalog.view_product", "catalog.add_product", "catalog.change_product",
     "catalog.view_service", "catalog.add_service", "catalog.change_service",
     "catalog.view_category", "catalog.add_category", "catalog.change_category",
-    # Inventory: stock movements, physical counts (stock takes) + valuation
+    "catalog.view_supplier", "catalog.add_supplier", "catalog.change_supplier",
+    # Inventory: purchase invoices, stock movements, physical counts + valuation
+    "catalog.view_purchaseinvoice", "catalog.add_purchaseinvoice",
+    "catalog.change_purchaseinvoice",
     "catalog.view_stockmovement", "catalog.add_stockmovement",
     "catalog.view_stocktake", "catalog.add_stocktake", "catalog.change_stocktake",
     "catalog.apply_stocktake", "catalog.view_inventory_valuation",
+    # (Opening stock is a one-time bulk action reusing add_product/change_product
+    #  + add_stockmovement above — it posts Stock In movements, no own permission.)
     # Finance — rate + cash reconciliation
     "finance.view_exchangerate", "finance.add_exchangerate", "finance.change_exchangerate",
     "finance.view_cashdeposit", "finance.add_cashdeposit", "finance.change_cashdeposit",

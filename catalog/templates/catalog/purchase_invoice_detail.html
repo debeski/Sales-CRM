@@ -1,0 +1,89 @@
+{% extends "dlux/base.html" %}
+
+{% block title %}{{ DLUX_STRINGS.pr_purchase_invoice|default:"Purchase Invoice" }} {{ invoice.number }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="h3 mb-1">
+                {{ DLUX_STRINGS.pr_purchase_invoice|default:"Purchase Invoice" }} {{ invoice.number }}
+                <span class="badge rounded-pill bg-success align-middle">{{ invoice.status_label }}</span>
+            </h1>
+            <p class="text-muted mb-0">{{ invoice.invoice_date }} · {{ DLUX_STRINGS.ui_rate|default:"Rate" }} 1 USD = {{ invoice.exchange_rate }} LYD</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'catalog:purchase_invoice_print' invoice.pk %}" target="_blank" class="btn btn-outline-secondary rounded-pill">
+                <i class="bi bi-printer me-1"></i>{{ DLUX_STRINGS.ui_print_export|default:"Print / Export" }}
+            </a>
+            <a href="{% url 'catalog:purchase_invoice_list' %}" class="btn btn-outline-secondary rounded-pill">
+                {{ DLUX_STRINGS.ui_view_all|default:"View all" }}
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_items|default:"Items" }}</div>
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>{{ DLUX_STRINGS.ui_description|default:"Description" }}</th>
+                                <th>{{ DLUX_STRINGS.label_unit|default:"Unit" }}</th>
+                                <th class="text-end">{{ DLUX_STRINGS.label_product_cost_usd|default:"Cost (USD)" }}</th>
+                                <th class="text-end">{{ DLUX_STRINGS.ui_qty|default:"Qty" }}</th>
+                                <th class="text-end">{{ DLUX_STRINGS.ui_total_usd|default:"Total (USD)" }}</th>
+                                <th class="text-end">{{ DLUX_STRINGS.label_total_lyd|default:"Total (LYD)" }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in lines %}
+                            <tr>
+                                <td>
+                                    {{ line.description }}
+                                    {% if line.barcode %}<div class="small text-muted">{{ line.barcode }}</div>{% endif %}
+                                </td>
+                                <td>{{ line.unit_label }}</td>
+                                <td class="text-end">{{ line.cost_usd|floatformat:2 }}</td>
+                                <td class="text-end">{{ line.quantity|floatformat:"-2" }}</td>
+                                <td class="text-end fw-semibold">{{ line.line_total_usd|floatformat:2 }}</td>
+                                <td class="text-end fw-semibold">{{ line.line_total_lyd|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted py-4">{{ DLUX_STRINGS.ui_no_items|default:"No items." }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light fw-bold">
+                                <td colspan="4" class="text-end">{{ DLUX_STRINGS.ui_total|default:"Total" }}</td>
+                                <td class="text-end">{{ invoice.total_usd|floatformat:2 }}</td>
+                                <td class="text-end">{{ invoice.total_lyd|floatformat:2 }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_supplier|default:"Supplier" }}</div>
+                <div class="card-body">
+                    <p class="mb-1 fw-semibold">{{ invoice.display_supplier }}</p>
+                    {% if invoice.supplier_phone %}<p class="mb-1 text-muted"><i class="bi bi-telephone me-1"></i>{{ invoice.supplier_phone }}</p>{% endif %}
+                    {% if invoice.supplier_address %}<p class="mb-0 text-muted"><i class="bi bi-geo-alt me-1"></i>{{ invoice.supplier_address }}</p>{% endif %}
+                    {% if invoice.notes %}<hr><p class="mb-0">{{ invoice.notes|linebreaksbr }}</p>{% endif %}
+                    {% if invoice.attachment %}
+                    <hr>
+                    <a href="{{ invoice.attachment.url }}" target="_blank" rel="noopener" class="text-decoration-none">
+                        <i class="bi bi-paperclip me-1"></i>{{ DLUX_STRINGS.label_purchaseinvoice_attachment|default:"Attachment" }}
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

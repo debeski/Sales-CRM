@@ -82,13 +82,24 @@ language, theme). Health endpoint: `/health/`.
 ## First-run checklist
 
 1. Complete the setup wizard (set the Arabic/English system name + logo — these
-   brand the printed invoice).
+   brand the printed sales invoice, payment receipt, and purchase invoice).
 2. **Finance → Exchange Rates → Add**: enter the current black-market USD→LYD rate.
    The dashboard warns until this is done.
 3. **Catalog → Categories / Products / Services**: add what you sell. For products,
-   enter `cost_usd` + `markup_percent` (or a direct `price_usd`); add a *Stock In*
-   movement to set initial quantity.
-4. Create staff users and add them to **Sales Staff** (`seed_roles` made the group).
+   enter `cost_usd` + `markup_percent` (or a direct `price_usd`).
+   - **Bulk shortcut for first setup:** **Catalog → Stock Movements → Opening
+     Stock (bulk)** loads everything already on the shelf in one grid — one row
+     per item, each a new or existing product, with the quantity currently in
+     storage. Submit to create the items and post the opening stock in one go
+     (the result appears as Stock In movements). It can only be applied once;
+     afterward the button becomes a view-only Opening Stock record. See
+     BUSINESS_RULES → *Opening stock*.
+   - **Normal stock purchases after launch:** use **Catalog → Purchase Invoices**
+     or **Catalog → Stock Movements → Add Stock**. This records supplier details,
+     creates/reuses products, accepts the supplier invoice scan/photo/PDF, and
+     posts Stock In movements per line.
+4. Create staff users and add them to one seeded role (`seed_roles` creates Sales
+   Manager, Sales Representative, and Delivery Courier).
 5. **Sales → New Invoice**: type or pick a customer in the single search box —
    existing customers autofill phone/address, and a new name is saved as a
    customer for next time. Add product / service lines (prices auto-fill), Save
@@ -104,6 +115,9 @@ language, theme). Health endpoint: `/health/`.
 | `/sales/new/` | New invoice editor |
 | `/catalog/` | Products & stock |
 | `/catalog/services/` | Services |
+| `/catalog/suppliers/` | Supplier list |
+| `/catalog/purchase-invoices/` | Purchase invoices / inbound stock invoices |
+| `/catalog/stock-movements/` | Stock ledger (+ Opening Stock / Add Stock buttons) |
 | `/finance/rates/` | Exchange rates |
 | `/finance/deposits/` | Cash deposits |
 | `/sales/report/` | Sales report (XLSX export from here; owner-only) |

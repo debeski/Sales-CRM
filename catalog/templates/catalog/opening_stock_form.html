@@ -1,0 +1,206 @@
+{% extends "dlux/form_base.html" %}
+{% load static %}
+
+{% block title %}{{ DLUX_STRINGS.ui_new_opening_stock|default:"Opening Stock" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h1 class="h3 mb-0">{{ DLUX_STRINGS.ui_new_opening_stock|default:"Opening Stock" }}</h1>
+        <span class="badge rounded-pill text-bg-light border">
+            <i class="bi bi-currency-exchange me-1"></i>
+            {{ DLUX_STRINGS.ui_rate|default:"Rate" }}: 1 USD = {{ current_rate }} LYD
+        </span>
+    </div>
+    <p class="text-muted">{{ DLUX_STRINGS.ui_opening_stock_help|default:"Load everything already on the shelf in one pass. Each row is a new item, or an existing one you pick from the list. Enter the quantity currently in storage. On Apply, each row creates or updates its product and posts a Stock In movement." }}</p>
+
+    <form method="post" novalidate
+          onsubmit="return confirm('{{ DLUX_STRINGS.ui_opening_apply_confirm|default:"This will create the new items, update prices on the existing ones, and post the storage quantities as Stock In movements. It posts real stock and cannot be auto-undone. Continue?" }}');">
+        {% csrf_token %}
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">{{ DLUX_STRINGS.ui_items|default:"Items" }}</span>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" id="add-line">
+                    <i class="bi bi-plus-lg me-1"></i>{{ DLUX_STRINGS.ui_add_line|default:"Add Item" }}
+                </button>
+            </div>
+            <div class="card-body p-0">
+                {{ formset.management_form }}
+                {% if formset.non_form_errors %}
+                    <div class="alert alert-danger m-3">{{ formset.non_form_errors }}</div>
+                {% endif %}
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0" id="items-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="min-width:200px">{{ DLUX_STRINGS.label_product_name|default:"Name" }}</th>
+                                <th style="min-width:150px">{{ DLUX_STRINGS.label_product_category|default:"Category" }}</th>
+                                <th style="min-width:110px">{{ DLUX_STRINGS.label_product_unit|default:"Unit" }}</th>
+                                <th style="min-width:130px">{{ DLUX_STRINGS.label_product_barcode|default:"Barcode" }}</th>
+                                <th class="text-end" style="min-width:110px">{{ DLUX_STRINGS.label_product_cost_usd|default:"Cost (USD)" }}</th>
+                                <th class="text-end" style="width:90px">{{ DLUX_STRINGS.label_product_markup_percent|default:"Markup %" }}</th>
+                                <th class="text-end" style="min-width:110px">{{ DLUX_STRINGS.label_product_price_usd|default:"Price (USD)" }}</th>
+                                <th class="text-end" style="min-width:120px">{{ DLUX_STRINGS.label_product_price_lyd_override|default:"Manual LYD" }}</th>
+                                <th class="text-end" style="width:100px">{{ DLUX_STRINGS.label_openingstockline_quantity|default:"In Storage" }}</th>
+                                <th style="width:48px"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="items-body">
+                            {% for itemform in formset %}
+                            <tr class="line-row" data-price-sync-row>
+                                {{ itemform.id }}{{ itemform.product.as_hidden }}
+                                <td>{{ itemform.name }}</td>
+                                <td>{{ itemform.category }}</td>
+                                <td>{{ itemform.unit }}</td>
+                                <td>{{ itemform.barcode }}</td>
+                                <td>{{ itemform.cost_usd }}</td>
+                                <td>{{ itemform.markup_percent }}</td>
+                                <td>{{ itemform.price_usd }}</td>
+                                <td>{{ itemform.price_lyd_override }}</td>
+                                <td>{{ itemform.quantity }}</td>
+                                <td class="text-center">
+                                    <span class="d-none">{{ itemform.DELETE }}</span>
+                                    <button type="button" class="btn btn-sm btn-link text-danger del-line" title="{{ DLUX_STRINGS.ui_remove|default:'Remove' }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {# Suggestions for the product combobox (new-or-existing). #}
+                <datalist id="product-datalist">
+                    {% for p in products %}
+                    <option value="{{ p.name }}" data-id="{{ p.pk }}"></option>
+                    {% endfor %}
+                </datalist>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center gap-2">
+            <span class="text-muted small">{{ DLUX_STRINGS.ui_opening_apply_hint|default:"Creates new products, corrects prices on existing ones, and posts a Stock In movement per line. Cannot be undone." }}</span>
+            <div class="d-flex gap-2">
+                <a href="{% url 'catalog:stock_movement_list' %}"
+                   class="btn btn-outline-secondary rounded-pill">{{ DLUX_STRINGS.btn_cancel|default:"Cancel" }}</a>
+                <button type="submit" class="btn btn-success rounded-pill px-4">
+                    <i class="bi bi-check2-circle me-1"></i>{{ DLUX_STRINGS.ui_apply_opening_stock|default:"Apply — create items & post stock" }}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+{# Template row for cloning #}
+<template id="empty-form-row">
+    <tr class="line-row" data-price-sync-row>
+        {{ formset.empty_form.id }}{{ formset.empty_form.product.as_hidden }}
+        <td>{{ formset.empty_form.name }}</td>
+        <td>{{ formset.empty_form.category }}</td>
+        <td>{{ formset.empty_form.unit }}</td>
+        <td>{{ formset.empty_form.barcode }}</td>
+        <td>{{ formset.empty_form.cost_usd }}</td>
+        <td>{{ formset.empty_form.markup_percent }}</td>
+        <td>{{ formset.empty_form.price_usd }}</td>
+        <td>{{ formset.empty_form.price_lyd_override }}</td>
+        <td>{{ formset.empty_form.quantity }}</td>
+        <td class="text-center">
+            <span class="d-none">{{ formset.empty_form.DELETE }}</span>
+            <button type="button" class="btn btn-sm btn-link text-danger del-line" title="{{ DLUX_STRINGS.ui_remove|default:'Remove' }}">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="{% static 'catalog/js/price_sync.js' %}?v=20260709a" nonce="{{ request.csp_nonce }}" defer></script>
+<script id="product-map" type="application/json">{{ product_map_json|safe }}</script>
+<script>
+(function () {
+    const products = JSON.parse(document.getElementById('product-map').textContent || '{}');
+    const options = Array.from(document.querySelectorAll('#product-datalist option'));
+    const prefix = "{{ formset.prefix }}";
+    const totalForms = document.getElementById('id_' + prefix + '-TOTAL_FORMS');
+    const body = document.getElementById('items-body');
+
+    function q(row, suffix) { return row.querySelector('[name$="-' + suffix + '"]'); }
+
+    // Match a typed/selected name against the datalist to find the product id.
+    function matchId(value) {
+        const v = (value || '').trim().toLowerCase();
+        const opt = options.find((o) => o.value.trim().toLowerCase() === v);
+        return opt ? (opt.dataset.id || '') : '';
+    }
+
+    // Fill a field unless the user already edited it by hand. Opening-stock rows
+    // start with defaults like 0.00 and "piece"; those still count as untouched
+    // and must be replaced when an existing product is selected.
+    function setAuto(el, val) {
+        if (!el) return;
+        if (el.dataset.userEdited === '1') return;
+        el.value = (val === '' || val === undefined || val === null) ? '' : val;
+        el.dataset.autofilled = '1';
+    }
+
+    function markManual(el) {
+        if (document.activeElement !== el) return;
+        el.dataset.autofilled = '';
+        el.dataset.userEdited = '1';
+    }
+
+    function syncRow(row) {
+        const nameInput = q(row, 'name');
+        const hiddenFk = q(row, 'product');
+        const id = matchId(nameInput ? nameInput.value : '');
+        if (hiddenFk) hiddenFk.value = id;  // blank id → a new product is created on apply
+        if (id && products[id]) {
+            const d = products[id];
+            setAuto(q(row, 'cost_usd'), d.cost);
+            setAuto(q(row, 'markup_percent'), d.markup);
+            setAuto(q(row, 'price_usd'), d.price_usd);
+            setAuto(q(row, 'price_lyd_override'), d.price_lyd);
+            setAuto(q(row, 'barcode'), d.barcode);
+            setAuto(q(row, 'category'), d.category);
+            setAuto(q(row, 'unit'), d.unit);
+        }
+    }
+
+    function wireRow(row) {
+        const nameInput = q(row, 'name');
+        if (nameInput) {
+            nameInput.addEventListener('input', () => syncRow(row));
+            nameInput.addEventListener('change', () => syncRow(row));
+        }
+        // Clear the autofilled flag once the user edits a field by hand.
+        ['cost_usd', 'markup_percent', 'price_usd', 'price_lyd_override', 'barcode', 'category', 'unit'].forEach((f) => {
+            const el = q(row, f);
+            if (el) el.addEventListener('input', () => markManual(el));
+            if (el) el.addEventListener('change', () => markManual(el));
+        });
+        const del = row.querySelector('.del-line');
+        if (del) del.addEventListener('click', () => {
+            const delInput = q(row, 'DELETE');
+            if (delInput) { delInput.checked = true; row.style.display = 'none'; }
+            else { row.remove(); }
+        });
+    }
+
+    document.getElementById('add-line').addEventListener('click', () => {
+        const idx = parseInt(totalForms.value, 10);
+        const html = document.getElementById('empty-form-row').innerHTML.replace(/__prefix__/g, idx);
+        const holder = document.createElement('tbody');
+        holder.innerHTML = html.trim();
+        const tr = holder.firstElementChild;
+        body.appendChild(tr);
+        totalForms.value = idx + 1;
+        wireRow(tr);
+    });
+
+    body.querySelectorAll('.line-row').forEach(wireRow);
+})();
+</script>
+{% endblock %}

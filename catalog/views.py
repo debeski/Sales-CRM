@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -14,9 +15,64 @@ from dlux.utils import log_user_action
 from common.views import ScopedListView
 from finance.services import get_current_rate, usd_to_lyd
 
-from .filters import CategoryFilter, ProductFilter, ServiceFilter, StockMovementFilter, StockTakeFilter
-from .models import Category, Product, Service, StockMovement, StockTake, StockTakeLine
-from .tables import CategoryTable, ProductTable, ServiceTable, StockMovementTable, StockTakeTable
+from .filters import (
+    CategoryFilter, ProductFilter, PurchaseInvoiceFilter, ServiceFilter, StockMovementFilter,
+    StockTakeFilter, SupplierFilter,
+)
+from .forms import OpeningStockLineFormSet, PurchaseInvoiceForm, PurchaseInvoiceLineFormSet
+from .models import (
+    Category, Product, PurchaseInvoice, PurchaseInvoiceLine, Service, StockMovement,
+    StockTake, StockTakeLine, Supplier,
+)
+from .tables import (
+    CategoryTable, ProductTable, PurchaseInvoiceTable, ServiceTable, StockMovementTable,
+    StockTakeTable, SupplierTable,
+)
+
+
+def _product_autofill_map_json():
+    """JSON {pk: {cost, markup, price_usd, price_lyd, category, unit, barcode}}
+    used by both Opening Stock and Purchase Invoice grids."""
+    data = {}
+    for p in Product.objects.all():
+        data[str(p.pk)] = {
+            "cost": float(p.cost_usd or 0),
+            "markup": float(p.markup_percent or 0),
+            "price_usd": float(p.price_usd or 0),
+            "price_lyd": float(p.price_lyd_override) if p.price_lyd_override is not None else "",
+            "category": str(p.category_id or ""),
+            "unit": p.unit,
+            "barcode": p.barcode,
+        }
+    return json.dumps(data)
+
+
+def _save_product_from_intake_line(cd):
+    """Create or reuse a product from an inbound stock row, then apply the row's
+    pricing fields to it. The typed product name is also a no-JS fallback match."""
+    name = (cd.get("name") or "").strip()
+    pid = cd.get("product")
+    product = Product.objects.filter(pk=pid).first() if pid else None
+    if product is None and name:
+        product = Product.objects.filter(name__iexact=name).first()
+    if product is None:
+        product = Product(name=name)
+    product.name = name or product.name
+    product.category = cd.get("category")
+    product.unit = cd.get("unit") or product.unit
+    if cd.get("barcode"):
+        product.barcode = cd["barcode"]
+    product.cost_usd = cd.get("cost_usd") or Decimal("0")
+    product.markup_percent = cd.get("markup_percent") or Decimal("0")
+    product.price_usd = cd.get("price_usd") or Decimal("0")
+    product.price_lyd_override = cd.get("price_lyd_override")
+    product.track_stock = True
+    product.save()
+    return product
+
+
+def _opening_stock_used():
+    return StockMovement.objects.filter(reference="OPENING").exists()
 
 
 class CategoryListView(ScopedListView):
@@ -25,6 +81,14 @@ class CategoryListView(ScopedListView):
     table_class = CategoryTable
     filterset_class = CategoryFilter
     page_title_key = "page_categories"
+
+
+class SupplierListView(ScopedListView):
+    model = Supplier
+    permission_required = "catalog.view_supplier"
+    table_class = SupplierTable
+    filterset_class = SupplierFilter
+    page_title_key = "page_suppliers"
 
 
 class ProductListView(ScopedListView):
@@ -53,8 +117,25 @@ class StockMovementListView(ScopedListView):
     permission_required = "catalog.view_stockmovement"
     table_class = StockMovementTable
     filterset_class = StockMovementFilter
+    template_name = "catalog/stock_movement_list.html"  # adds the Opening-Stock button
     page_title_key = "page_stock_movements"
     page_subtitle_key = "page_stock_movements_sub"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["opening_stock_used"] = _opening_stock_used()
+        return ctx
+
+
+class PurchaseInvoiceListView(ScopedListView):
+    model = PurchaseInvoice
+    permission_required = "catalog.view_purchaseinvoice"
+    table_class = PurchaseInvoiceTable
+    filterset_class = PurchaseInvoiceFilter
+    template_name = "catalog/purchase_invoice_list.html"
+    page_title_key = "page_purchase_invoices"
+    page_subtitle_key = "page_purchase_invoices_sub"
+    allow_add = False
 
 
 # --------------------------------------------------------------------------- #
@@ -177,4 +258,251 @@ class InventoryValuationView(LoginRequiredMixin, PermissionRequiredMixin, Templa
         ctx["total_lyd"] = usd_to_lyd(total_usd, rate)
         ctx["rate"] = rate
         ctx["item_count"] = len(rows)
+        return ctx
+
+
+# --------------------------------------------------------------------------- #
+# Opening stock (one-time "ground zero" inventory intake)
+# --------------------------------------------------------------------------- #
+class OpeningStockEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """One-time bulk intake for first setup — a **child of the stock ledger**, not
+    a document of its own. Reached from a trigger on the Stock Movements page: fill
+    the grid, confirm, and each row create-or-reuses its ``Product`` and posts a
+    Stock In ``StockMovement`` (``reason="Opening balance"``, ``reference="OPENING"``)
+    in a single transaction. The movements are the record; there is no list/detail.
+    """
+
+    permission_required = ("catalog.add_product", "catalog.change_product", "catalog.add_stockmovement")
+    raise_exception = True
+    template_name = "catalog/opening_stock_form.html"
+
+    def _product_map(self):
+        return _product_autofill_map_json()
+
+    def _context(self, formset):
+        return {
+            "formset": formset,
+            "current_rate": get_current_rate(),
+            "product_map_json": self._product_map(),
+            "products": Product.objects.order_by("name"),
+        }
+
+    @staticmethod
+    def _apply_line(cd):
+        """Create-or-reuse the product for a grid row (correcting its pricing from
+        the row's figures — the admin may reprice an existing item), then post a
+        Stock In movement for the storage quantity. A zero-qty row still (re)prices
+        the product without a movement."""
+        product = _save_product_from_intake_line(cd)
+        qty = cd.get("quantity") or Decimal("0")
+        if qty > 0:
+            StockMovement.objects.create(
+                product=product,
+                movement_type=StockMovement.TYPE_IN,
+                quantity=qty,
+                reason="Opening balance",
+                reference="OPENING",
+            )
+
+    def get(self, request):
+        if _opening_stock_used():
+            messages.info(request, _("Opening stock has already been applied."))
+            return redirect("catalog:opening_stock_detail")
+        return render(request, self.template_name, self._context(OpeningStockLineFormSet()))
+
+    def post(self, request):
+        if _opening_stock_used():
+            messages.error(request, _("Opening stock can only be applied once."))
+            return redirect("catalog:opening_stock_detail")
+        formset = OpeningStockLineFormSet(request.POST)
+        if formset.is_valid():
+            kept = 0
+            with transaction.atomic():
+                for form in formset:
+                    cd = form.cleaned_data
+                    if not cd or cd.get("DELETE"):
+                        continue
+                    if not (cd.get("name") or "").strip():
+                        continue  # blank row the user added but never filled
+                    self._apply_line(cd)
+                    kept += 1
+                log_user_action(
+                    request, "CREATE", model_name="Opening Stock",
+                    details=f"Opening stock intake: {kept} item(s)",
+                )
+            if kept:
+                messages.success(
+                    request,
+                    _("Opening stock applied — %(n)s item(s) loaded into storage.") % {"n": kept},
+                )
+            else:
+                messages.warning(request, _("No items were entered."))
+            return redirect("catalog:stock_movement_list")
+        return render(request, self.template_name, self._context(formset))
+
+
+class OpeningStockDetailView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    """View-only opening stock record. The stock movements are still the source
+    of truth; this page groups the `OPENING` rows into an invoice-like view."""
+
+    permission_required = "catalog.view_stockmovement"
+    raise_exception = True
+    template_name = "catalog/opening_stock_detail.html"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        movements = list(
+            StockMovement.objects.filter(reference="OPENING")
+            .select_related("product", "created_by")
+            .order_by("created_at", "pk")
+        )
+        ctx["movements"] = movements
+        ctx["total_qty"] = sum((m.quantity for m in movements), Decimal("0.00"))
+        ctx["created_at"] = movements[0].created_at if movements else None
+        ctx["created_by"] = movements[0].created_by if movements else None
+        return ctx
+
+
+class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = (
+        "catalog.add_purchaseinvoice",
+        "catalog.add_product",
+        "catalog.change_product",
+        "catalog.add_stockmovement",
+    )
+    raise_exception = True
+    template_name = "catalog/purchase_invoice_form.html"
+
+    def _context(self, form, formset):
+        return {
+            "form": form,
+            "formset": formset,
+            "current_rate": get_current_rate(),
+            "product_map_json": _product_autofill_map_json(),
+            "products": Product.objects.order_by("name"),
+            "suppliers": Supplier.objects.filter(is_active=True).order_by("name"),
+        }
+
+    def _sync_supplier(self, invoice):
+        name = (invoice.supplier_name or "").strip()
+        supplier = invoice.supplier if invoice.supplier_id else None
+        if supplier is None and name:
+            supplier = Supplier.objects.filter(name__iexact=name).first()
+            if supplier is None:
+                supplier = Supplier(name=name)
+        if supplier is None:
+            return
+
+        invoice.supplier_name = invoice.supplier_name or supplier.name
+        invoice.supplier_phone = invoice.supplier_phone or supplier.phone
+        invoice.supplier_address = invoice.supplier_address or supplier.address
+
+        dirty = supplier.pk is None
+        if not supplier.name and name:
+            supplier.name, dirty = name, True
+        if invoice.supplier_phone and not supplier.phone:
+            supplier.phone, dirty = invoice.supplier_phone, True
+        if invoice.supplier_address and not supplier.address:
+            supplier.address, dirty = invoice.supplier_address, True
+        if dirty:
+            supplier.save()
+        invoice.supplier = supplier
+
+    def _kept_forms(self, formset):
+        kept = []
+        for form in formset:
+            cd = form.cleaned_data
+            if not cd or cd.get("DELETE"):
+                continue
+            if not (cd.get("name") or "").strip():
+                continue
+            kept.append(cd)
+        return kept
+
+    def _save(self, request, form, formset):
+        kept = self._kept_forms(formset)
+        if not kept:
+            return None
+        with transaction.atomic():
+            invoice = form.save(commit=False)
+            if invoice.exchange_rate is None:
+                invoice.exchange_rate = get_current_rate()
+            invoice.status = PurchaseInvoice.STATUS_POSTED
+            self._sync_supplier(invoice)
+            invoice.save()
+            for cd in kept:
+                product = _save_product_from_intake_line(cd)
+                qty = cd.get("quantity") or Decimal("0")
+                PurchaseInvoiceLine.objects.create(
+                    invoice=invoice,
+                    product=product,
+                    category=product.category,
+                    description=product.name,
+                    unit=product.unit,
+                    barcode=product.barcode,
+                    cost_usd=product.cost_usd,
+                    markup_percent=product.markup_percent,
+                    price_usd=product.price_usd,
+                    price_lyd_override=product.price_lyd_override,
+                    quantity=qty,
+                )
+                StockMovement.objects.create(
+                    product=product,
+                    movement_type=StockMovement.TYPE_IN,
+                    quantity=qty,
+                    reason=f"Purchase invoice {invoice.number}",
+                    reference=invoice.number,
+                    purchase_invoice=invoice,
+                )
+            invoice.recalc_totals()
+            log_user_action(request, "CREATE", instance=invoice)
+        return invoice
+
+    def get(self, request):
+        form = PurchaseInvoiceForm()
+        formset = PurchaseInvoiceLineFormSet(initial=[{} for _ in range(8)])
+        return render(request, self.template_name, self._context(form, formset))
+
+    def post(self, request):
+        form = PurchaseInvoiceForm(request.POST, request.FILES)
+        formset = PurchaseInvoiceLineFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            invoice = self._save(request, form, formset)
+            if invoice is None:
+                messages.error(request, _("Enter at least one purchased item."))
+                return render(request, self.template_name, self._context(form, formset))
+            messages.success(request, _("Purchase invoice %(no)s posted. Stock updated.") % {"no": invoice.number})
+            return redirect("catalog:purchase_invoice_detail", pk=invoice.pk)
+        return render(request, self.template_name, self._context(form, formset))
+
+
+class PurchaseInvoiceDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = PurchaseInvoice
+    permission_required = "catalog.view_purchaseinvoice"
+    raise_exception = True
+    template_name = "catalog/purchase_invoice_detail.html"
+    context_object_name = "invoice"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["lines"] = self.object.lines.select_related("product", "category")
+        ctx["movements"] = self.object.stock_movements.select_related("product").order_by("created_at", "pk")
+        return ctx
+
+
+class PurchaseInvoicePrintView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = PurchaseInvoice
+    permission_required = "catalog.view_purchaseinvoice"
+    raise_exception = True
+    template_name = "catalog/purchase_invoice_print.html"
+    context_object_name = "invoice"
+
+    def get_context_data(self, **kwargs):
+        from dlux.translations import get_current_language_code
+
+        ctx = super().get_context_data(**kwargs)
+        ctx["lines"] = self.object.lines.select_related("product", "category")
+        lang = get_current_language_code(self.request)
+        ctx["doc_lang"] = lang
+        ctx["is_rtl"] = lang.startswith("ar")
         return ctx

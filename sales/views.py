@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -24,6 +24,7 @@ from finance.services import (
     get_current_rate,
     get_ean_black_market_rate,
     has_configured_rate,
+    quantize_lyd,
 )
 
 from .filters import CustomerFilter, DeliveryFilter, InvoiceFilter, PaymentFilter
@@ -46,6 +47,14 @@ def _visible_invoices(user):
     manager holding ``view_all_invoice``). The single ownership choke point for
     the full-page invoice flows that bypass ScopedListView."""
     return apply_ownership(Invoice.objects.all(), user)
+
+
+def _visible_payments(user):
+    """Payments this user may open on standalone payment surfaces."""
+    return apply_ownership(
+        Payment.objects.select_related("invoice", "invoice__customer", "created_by", "deposit"),
+        user,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -216,7 +225,7 @@ class InvoiceCreateView(_InvoiceEditorView):
         return render(request, self.template_name, self._context(request, form, formset))
 
     def post(self, request):
-        form = InvoiceForm(request.POST, request.FILES, user=request.user)
+        form = InvoiceForm(request.POST, user=request.user)
         formset = InvoiceItemFormSet(request.POST)
         if form.is_valid() and formset.is_valid():
             invoice = self._save(request, form, formset)
@@ -246,7 +255,7 @@ class InvoiceUpdateView(_InvoiceEditorView):
         if not invoice.is_editable:
             messages.warning(request, _("Only draft invoices can be edited."))
             return redirect("sales:invoice_detail", pk=invoice.pk)
-        form = InvoiceForm(request.POST, request.FILES, instance=invoice, user=request.user)
+        form = InvoiceForm(request.POST, instance=invoice, user=request.user)
         formset = InvoiceItemFormSet(request.POST, instance=invoice)
         if form.is_valid() and formset.is_valid():
             invoice = self._save(request, form, formset, invoice)
@@ -327,6 +336,38 @@ class InvoicePrintView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         ctx["items"] = self.object.items.all()
         ctx["payments"] = self.object.payments.all()
         lang = get_current_language_code(self.request)
+        ctx["doc_lang"] = lang
+        ctx["is_rtl"] = lang.startswith("ar")
+        return ctx
+
+
+class PaymentReceiptView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    model = Payment
+    permission_required = "sales.view_payment"
+    raise_exception = True
+    template_name = "sales/payment_receipt.html"
+    context_object_name = "payment"
+
+    def get_queryset(self):
+        return _visible_payments(self.request.user)
+
+    def get_context_data(self, **kwargs):
+        from dlux.translations import get_current_language_code
+
+        ctx = super().get_context_data(**kwargs)
+        payment = self.object
+        invoice = payment.invoice
+        paid_through = (
+            invoice.payments.filter(
+                Q(paid_at__lt=payment.paid_at)
+                | Q(paid_at=payment.paid_at, pk__lte=payment.pk)
+            ).aggregate(t=Sum("amount"))["t"]
+            or Decimal("0.00")
+        )
+        lang = get_current_language_code(self.request)
+        ctx["invoice"] = invoice
+        ctx["paid_before_receipt"] = quantize_lyd(paid_through - payment.amount)
+        ctx["balance_after_receipt"] = quantize_lyd(invoice.total_lyd - paid_through)
         ctx["doc_lang"] = lang
         ctx["is_rtl"] = lang.startswith("ar")
         return ctx

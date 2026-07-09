@@ -24,7 +24,6 @@ DLUX_STRINGS = {
         "label_invoice_discount_amount": "Discount (LYD)",
         "label_invoice_total_lyd": "Total (LYD)",
         "label_invoice_notes": "Notes",
-        "label_invoice_attachment": "Attachment (scan / photo)",
         # Invoice item
         "label_invoiceitem_kind": "Kind",
         "label_invoiceitem_product": "Product",
@@ -33,6 +32,7 @@ DLUX_STRINGS = {
         "label_invoiceitem_unit_price_lyd": "Unit Price (LYD)",
         "label_invoiceitem_quantity": "Qty",
         # Payment
+        "label_payment_receipt_number": "Receipt No.",
         "label_payment_amount": "Amount (LYD)",
         "label_payment_method": "Method",
         "label_payment_paid_at": "Paid At",
@@ -126,7 +126,6 @@ DLUX_STRINGS = {
         "label_invoice_discount_amount": "الخصم (دينار)",
         "label_invoice_total_lyd": "الإجمالي (دينار)",
         "label_invoice_notes": "ملاحظات",
-        "label_invoice_attachment": "المرفق (مسح / صورة)",
         # Invoice item
         "label_invoiceitem_kind": "النوع",
         "label_invoiceitem_product": "الصنف",
@@ -135,6 +134,7 @@ DLUX_STRINGS = {
         "label_invoiceitem_unit_price_lyd": "سعر الوحدة (دينار)",
         "label_invoiceitem_quantity": "الكمية",
         # Payment
+        "label_payment_receipt_number": "رقم إيصال القبض",
         "label_payment_amount": "المبلغ (دينار)",
         "label_payment_method": "طريقة الدفع",
         "label_payment_paid_at": "تاريخ الدفع",

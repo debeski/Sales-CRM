@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ DLUX_STRINGS.pr_invoice }} {{ invoice.number }}</title>
+    <title>{{ DLUX_STRINGS.pr_purchase_invoice|default:"Purchase Invoice" }} {{ invoice.number }}</title>
     <style>
         :root { --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --brand:#0d6efd; }
         * { box-sizing: border-box; }
@@ -25,16 +25,9 @@
         thead th { background: #f9fafb; text-align: left; padding: 10px; border-bottom: 2px solid var(--line); }
         th.num, td.num { text-align: right; }
         tbody td { padding: 10px; border-bottom: 1px solid var(--line); }
-        .kind { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 1px 7px; margin-left: 6px; }
         .totals { margin-top: 18px; margin-left: auto; width: 280px; font-size: 14px; }
         .totals .row { display: flex; justify-content: space-between; padding: 6px 0; }
         .totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: 17px; margin-top: 6px; padding-top: 10px; }
-        .badge-status { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-        .s-paid { background: #d1fae5; color: #065f46; }
-        .s-partial { background: #fef3c7; color: #92400e; }
-        .s-issued { background: #dbeafe; color: #1e40af; }
-        .s-draft { background: #e5e7eb; color: #374151; }
-        .s-cancelled { background: #fee2e2; color: #991b1b; }
         .foot { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
         .rate-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
         .actions { max-width: 820px; margin: 0 auto 16px; text-align: right; }
@@ -44,7 +37,7 @@
     </style>
 </head>
 <body>
-    <div class="actions"><button onclick="window.print()">🖶 {{ DLUX_STRINGS.pr_print_save }}</button></div>
+    <div class="actions"><button onclick="window.print()">&#128438; {{ DLUX_STRINGS.pr_print_save }}</button></div>
     <div class="sheet">
         <div class="top">
             <div class="brand">
@@ -57,25 +50,26 @@
                 </div>
             </div>
             <div class="doc">
-                <h2>{{ DLUX_STRINGS.pr_invoice }}</h2>
+                <h2>{{ DLUX_STRINGS.pr_purchase_invoice|default:"Purchase Invoice" }}</h2>
                 <div class="meta">
                     <div><strong>{{ invoice.number }}</strong></div>
                     <div>{{ invoice.invoice_date }}</div>
-                    <div class="badge-status s-{{ invoice.status }}">{{ invoice.status_label }}</div>
+                    <div>{{ invoice.status_label }}</div>
                 </div>
             </div>
         </div>
 
         <div class="parties">
             <div class="box">
-                <div class="label">{{ DLUX_STRINGS.pr_billed_to }}</div>
-                <div class="name">{{ invoice.display_customer }}</div>
-                {% if invoice.customer_phone %}<div>{{ invoice.customer_phone }}</div>{% endif %}
-                {% if invoice.customer_address %}<div>{{ invoice.customer_address }}</div>{% endif %}
+                <div class="label">{{ DLUX_STRINGS.pr_supplier|default:"Supplier" }}</div>
+                <div class="name">{{ invoice.display_supplier }}</div>
+                {% if invoice.supplier_phone %}<div>{{ invoice.supplier_phone }}</div>{% endif %}
+                {% if invoice.supplier_address %}<div>{{ invoice.supplier_address }}</div>{% endif %}
             </div>
             <div class="box" style="text-align:{% if is_rtl %}left{% else %}right{% endif %}">
-                <div class="label">{{ DLUX_STRINGS.pr_amount_due }}</div>
-                <div class="name">{{ invoice.balance_due|floatformat:2 }} LYD</div>
+                <div class="label">{{ DLUX_STRINGS.pr_total|default:"Total" }}</div>
+                <div class="name">{{ invoice.total_lyd|floatformat:2 }} LYD</div>
+                <div>{{ invoice.total_usd|floatformat:2 }} USD</div>
                 <div class="rate-note">{{ DLUX_STRINGS.pr_rate }}: 1 USD = {{ invoice.exchange_rate }} LYD</div>
             </div>
         </div>
@@ -83,37 +77,37 @@
         <table>
             <thead>
                 <tr>
-                    <th>{{ DLUX_STRINGS.pr_no }}</th><th>{{ DLUX_STRINGS.pr_description }}</th>
-                    <th class="num">{{ DLUX_STRINGS.ui_unit_price_lyd }}</th><th class="num">{{ DLUX_STRINGS.ui_qty }}</th><th class="num">{{ DLUX_STRINGS.label_total_lyd }}</th>
+                    <th>{{ DLUX_STRINGS.pr_no|default:"No." }}</th>
+                    <th>{{ DLUX_STRINGS.pr_description|default:"Description" }}</th>
+                    <th>{{ DLUX_STRINGS.label_unit|default:"Unit" }}</th>
+                    <th class="num">{{ DLUX_STRINGS.label_product_cost_usd|default:"Cost (USD)" }}</th>
+                    <th class="num">{{ DLUX_STRINGS.ui_qty|default:"Qty" }}</th>
+                    <th class="num">{{ DLUX_STRINGS.ui_total_usd|default:"Total (USD)" }}</th>
+                    <th class="num">{{ DLUX_STRINGS.label_total_lyd|default:"Total (LYD)" }}</th>
                 </tr>
             </thead>
             <tbody>
-                {% for item in items %}
+                {% for line in lines %}
                 <tr>
                     <td>{{ forloop.counter }}</td>
-                    <td>{{ item.description }}<span class="kind">{{ item.kind_label }}</span></td>
-                    <td class="num">{{ item.unit_price_lyd|floatformat:2 }}</td>
-                    <td class="num">{{ item.quantity|floatformat:"-2" }}</td>
-                    <td class="num">{{ item.line_total_lyd|floatformat:2 }}</td>
+                    <td>{{ line.description }}</td>
+                    <td>{{ line.unit_label }}</td>
+                    <td class="num">{{ line.cost_usd|floatformat:2 }}</td>
+                    <td class="num">{{ line.quantity|floatformat:"-2" }}</td>
+                    <td class="num">{{ line.line_total_usd|floatformat:2 }}</td>
+                    <td class="num">{{ line.line_total_lyd|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
         <div class="totals">
-            <div class="row"><span>{{ DLUX_STRINGS.pr_subtotal }}</span><span>{{ invoice.subtotal_lyd|floatformat:2 }}</span></div>
-            {% if invoice.discount_amount %}
-            <div class="row"><span>{{ DLUX_STRINGS.pr_discount }}</span><span>− {{ invoice.discount_amount|floatformat:2 }}</span></div>
-            {% endif %}
-            <div class="row grand"><span>{{ DLUX_STRINGS.pr_total }}</span><span>{{ invoice.total_lyd|floatformat:2 }} LYD</span></div>
-            {% if invoice.amount_paid %}
-            <div class="row"><span>{{ DLUX_STRINGS.pr_paid }}</span><span>{{ invoice.amount_paid|floatformat:2 }}</span></div>
-            <div class="row"><span>{{ DLUX_STRINGS.pr_balance }}</span><span>{{ invoice.balance_due|floatformat:2 }}</span></div>
-            {% endif %}
+            <div class="row"><span>{{ DLUX_STRINGS.ui_total_usd|default:"Total (USD)" }}</span><span>{{ invoice.total_usd|floatformat:2 }}</span></div>
+            <div class="row grand"><span>{{ DLUX_STRINGS.pr_total|default:"Total" }}</span><span>{{ invoice.total_lyd|floatformat:2 }} LYD</span></div>
         </div>
 
         {% if invoice.notes %}<div class="foot"><strong>{{ DLUX_STRINGS.pr_notes }}:</strong> {{ invoice.notes|linebreaksbr }}</div>{% endif %}
-        <div class="foot">{{ DLUX_STRINGS.pr_thanks }} · {{ APP_CONFIG.identity.display_name|default:"Switch" }}</div>
+        <div class="foot">{{ APP_CONFIG.identity.display_name|default:"Switch" }}</div>
     </div>
 </body>
 </html>

@@ -43,17 +43,68 @@ class InvoiceTable(DluxTable):
     class Meta(DluxTable.Meta):
         model = Invoice
         fields = ("number", "customer", "salesperson", "invoice_date", "status", "total_lyd", "balance")
-        dlux_actions = False  # invoices use full-page flows, not modal CRUD
+        dlux_actions = True
 
     def render_salesperson(self, record):
         return _user_label(record.salesperson)
 
     def render_number(self, record):
-        return format_html(
-            '<a href="{}" class="fw-semibold text-decoration-none">{}</a>',
-            reverse("sales:invoice_detail", args=[record.pk]),
-            record.number or "—",
-        )
+        return record.number or "—"
+
+    def get_dlux_base_actions(self, record):
+        actions = [
+            {
+                "label": "ui_view_invoice",
+                "icon": "bi bi-eye",
+                "type": "url",
+                "url": reverse("sales:invoice_detail", args=[record.pk]),
+                "dblclick": True,
+                "permissions": ["sales.view_invoice"],
+            },
+            {
+                "label": "ui_print_export",
+                "icon": "bi bi-printer",
+                "type": "url",
+                "url": reverse("sales:invoice_print", args=[record.pk]),
+                "target": "_blank",
+                "permissions": ["sales.view_invoice"],
+            },
+        ]
+        if record.is_editable:
+            actions.extend(
+                [
+                    {"type": "divider"},
+                    {
+                        "label": "ui_edit_invoice",
+                        "icon": "bi bi-pencil",
+                        "type": "url",
+                        "url": reverse("sales:invoice_edit", args=[record.pk]),
+                        "permissions": ["sales.change_invoice"],
+                    },
+                    {
+                        "label": "ui_issue",
+                        "icon": "bi bi-check2-circle",
+                        "type": "form",
+                        "url": reverse("sales:invoice_issue", args=[record.pk]),
+                        "permissions": ["sales.issue_invoice"],
+                    },
+                ]
+            )
+        if record.status != Invoice.STATUS_CANCELLED:
+            if not record.is_editable:
+                actions.append({"type": "divider"})
+            actions.append(
+                {
+                    "label": "ui_cancel",
+                    "icon": "bi bi-x-circle",
+                    "type": "form",
+                    "url": reverse("sales:invoice_cancel", args=[record.pk]),
+                    "confirm": t("ui_cancel_confirm", "Cancel this invoice? Stock will be restored."),
+                    "textClass": "text-danger",
+                    "permissions": ["sales.cancel_invoice"],
+                }
+            )
+        return actions
 
     def render_customer(self, record):
         return record.display_customer
@@ -82,26 +133,47 @@ class CustomerTable(DluxTable):
 
 
 class PaymentTable(DluxTable):
+    receipt_number = tables.Column(verbose_name="Receipt No.")
     invoice = tables.Column(verbose_name="Invoice")
     amount = tables.Column(verbose_name="Amount (LYD)")
 
     class Meta(DluxTable.Meta):
         model = Payment
-        fields = ("invoice", "amount", "method", "paid_at", "created_by")
-        dlux_actions = False
+        fields = ("receipt_number", "invoice", "amount", "method", "paid_at", "created_by")
+        dlux_actions = True
+
+    def render_receipt_number(self, record):
+        return record.receipt_number or "—"
 
     def render_invoice(self, record):
-        return format_html(
-            '<a href="{}" class="text-decoration-none">{}</a>',
-            reverse("sales:invoice_detail", args=[record.invoice_id]),
-            record.invoice.number,
-        )
+        return record.invoice.number
 
     def render_amount(self, record):
         return f"{record.amount:,.2f}"
 
     def render_method(self, record):
         return t(f"method_{record.method}", record.get_method_display())
+
+    def get_dlux_base_actions(self, record):
+        return [
+            {
+                "label": "ui_view_invoice",
+                "icon": "bi bi-receipt",
+                "type": "url",
+                "url": reverse("sales:invoice_detail", args=[record.invoice_id]),
+                "dblclick": True,
+                "permissions": ["sales.view_invoice"],
+            },
+            {
+                "label": "ui_print_receipt",
+                "icon": "bi bi-printer",
+                "type": "url",
+                "url": reverse("sales:payment_receipt", args=[record.pk]),
+                "target": "_blank",
+                "dblclick": True,
+                "permissions": ["sales.view_payment"],
+            },
+        ]
 
 
 class DeliveryTable(DluxTable):

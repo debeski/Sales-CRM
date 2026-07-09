@@ -113,8 +113,6 @@ class Invoice(ScopedModel):
     amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"), editable=False, verbose_name="Amount Paid (LYD)")
 
     notes = models.TextField(blank=True, verbose_name="Notes")
-    # Optional scan/photo of the physical (signed) invoice or a supporting doc.
-    attachment = models.FileField(upload_to="invoices/", blank=True, verbose_name="Attachment")
     issued_at = models.DateTimeField(null=True, blank=True, editable=False, verbose_name="Issued At")
 
     class Meta:
@@ -312,6 +310,7 @@ class Payment(ScopedModel):
     )
 
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="payments", verbose_name="Invoice")
+    receipt_number = models.CharField(max_length=20, unique=True, blank=True, verbose_name="Receipt No.")
     amount = models.DecimalField(
         max_digits=14, decimal_places=2,
         validators=[MinValueValidator(Decimal("0.01"))], verbose_name="Amount (LYD)",
@@ -331,7 +330,7 @@ class Payment(ScopedModel):
         permissions = [("view_all_payment", "Can view all payments (not just own)")]
 
     def __str__(self):
-        return f"{self.amount} LYD on {self.invoice_id}"
+        return f"{self.receipt_number or 'Receipt'} — {self.amount} LYD on {self.invoice_id}"
 
     @property
     def method_label(self):
@@ -340,6 +339,7 @@ class Payment(ScopedModel):
 
     def save(self, *args, **kwargs):
         # Track a prior deposit link so a reassigned payment recomputes both batches.
+        using = kwargs.get("using")
         prev_deposit_id = None
         if self.pk:
             prev_deposit_id = (
@@ -347,6 +347,9 @@ class Payment(ScopedModel):
                 .values_list("deposit_id", flat=True).first()
             )
         super().save(*args, **kwargs)
+        if not self.receipt_number:
+            self.receipt_number = f"RCT-{self.pk:06d}"
+            super().save(update_fields=["receipt_number"], using=using)
         self.invoice.recalc_payments()
         self._recalc_linked_deposits(prev_deposit_id)
 
