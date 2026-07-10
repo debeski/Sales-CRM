@@ -1,11 +1,11 @@
 {% extends "dlux/base.html" %}
 
-{% block title %}{{ DLUX_STRINGS.ui_dashboard }}{% endblock %}
+{% block title %}{{ DLUX_STRINGS.sales_dashboard }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-        <h1 class="h3 mb-0">{{ DLUX_STRINGS.ui_dashboard }}</h1>
+        <h1 class="h3 mb-0">{{ DLUX_STRINGS.sales_dashboard }}</h1>
         <div class="d-flex gap-2">
             {% if perms.sales.view_sales_report %}
             <a href="{% url 'sales:report' %}" class="btn btn-outline-secondary rounded-pill"><i class="bi bi-graph-up me-1"></i>{{ DLUX_STRINGS.ui_reports }}</a>

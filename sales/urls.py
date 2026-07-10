@@ -27,9 +27,9 @@ app_name = "sales"
 _report_export = SalesReportExportView.as_view()
 _report_export.sidebar_exclude = True
 
-# Bare /sales/ redirects to the dashboard (the app home). The invoice list lives
+# Bare /sales/ redirects to the sales overview (the app home). The invoice list lives
 # at /sales/invoices/ so its sidebar URL doesn't prefix-match every other sales
-# page (which made "Invoices" highlight on the dashboard, customers, etc.).
+# page (which made "Invoices" highlight on the overview, customers, etc.).
 _sales_home = RedirectView.as_view(pattern_name="sales:dashboard", permanent=False)
 _sales_home.sidebar_exclude = True
 

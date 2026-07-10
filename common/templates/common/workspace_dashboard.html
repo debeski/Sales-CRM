@@ -1,0 +1,134 @@
+{% extends "dlux/base.html" %}
+{% load static %}
+
+{% block title %}{{ DLUX_STRINGS.ui_workspace|default:"Workspace" }}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'common/css/workspace_dashboard.css' %}?v=20260710a">
+{% endblock %}
+
+{% block content %}
+<div class="workspace-shell"
+     data-workspace-dashboard
+     data-storage-key="{{ workspace_storage_key }}"
+     data-app-pref-namespace="switch_pos.workspace_dashboard.v1">
+    <header class="workspace-topbar">
+        <div>
+            <h1>{{ DLUX_STRINGS.ui_workspace|default:"Workspace" }}</h1>
+            <p>{{ DLUX_STRINGS.ui_workspace_subtitle|default:"Live operating surface across sales, stock, finance and delivery." }}</p>
+        </div>
+        <div class="workspace-toolbar">
+            <button type="button" class="workspace-icon-btn" data-dashboard-customize aria-expanded="false" title="{{ DLUX_STRINGS.ui_customize|default:'Customize' }}">
+                <i class="bi bi-sliders"></i><span>{{ DLUX_STRINGS.ui_customize|default:"Customize" }}</span>
+            </button>
+            <button type="button" class="workspace-icon-btn" data-dashboard-reset title="{{ DLUX_STRINGS.ui_reset_layout|default:'Reset layout' }}">
+                <i class="bi bi-arrow-counterclockwise"></i><span>{{ DLUX_STRINGS.ui_reset_layout|default:"Reset" }}</span>
+            </button>
+        </div>
+    </header>
+
+    <aside class="workspace-drawer" data-dashboard-drawer hidden>
+        <div class="workspace-drawer-head">
+            <strong>{{ DLUX_STRINGS.ui_tiles|default:"Tiles" }}</strong>
+            <span>{{ workspace_tile_count }}</span>
+        </div>
+        <div class="workspace-drawer-grid">
+            {% for tile in workspace_tiles %}
+            <label class="workspace-toggle">
+                <input type="checkbox" data-dashboard-toggle="{{ tile.id }}" checked>
+                <span>{{ tile.title }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </aside>
+
+    {% if workspace_tiles %}
+    <section class="workspace-grid" data-dashboard-grid>
+        {% for tile in workspace_tiles %}
+        <article class="workspace-tile tone-{{ tile.tone }} kind-{{ tile.kind }}"
+                 data-widget-id="{{ tile.id }}"
+                 data-default-size="{{ tile.size }}"
+                 data-size="{{ tile.size }}"
+                 draggable="true">
+            <div class="tile-chrome">
+                <div class="tile-title">
+                    <i class="{{ tile.icon }}"></i>
+                    <span>{{ tile.title }}</span>
+                </div>
+                <div class="tile-tools">
+                    {% if tile.url %}
+                    <a class="tile-tool" href="{{ tile.url }}" title="{{ DLUX_STRINGS.ui_open|default:'Open' }}"><i class="bi bi-box-arrow-up-right"></i></a>
+                    {% endif %}
+                    <button type="button" class="tile-tool" data-dashboard-size title="{{ DLUX_STRINGS.ui_resize|default:'Resize' }}"><i class="bi bi-arrows-angle-expand"></i></button>
+                    <button type="button" class="tile-tool" data-dashboard-hide title="{{ DLUX_STRINGS.ui_hide|default:'Hide' }}"><i class="bi bi-eye-slash"></i></button>
+                    <button type="button" class="tile-tool drag-handle" data-dashboard-drag title="{{ DLUX_STRINGS.ui_drag|default:'Drag' }}"><i class="bi bi-grip-vertical"></i></button>
+                </div>
+            </div>
+
+            {% if tile.kind == "actions" %}
+            <div class="tile-actions">
+                {% for action in tile.actions %}
+                <a href="{{ action.url }}" class="action-chip">
+                    <i class="{{ action.icon }}"></i><span>{{ action.label }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% elif tile.kind == "list" %}
+            <div class="tile-list">
+                {% for item in tile.items %}
+                <a class="tile-row tone-{{ item.tone }}" href="{{ item.url|default:'#' }}">
+                    <span>
+                        <strong>{{ item.label }}</strong>
+                        {% if item.meta %}<small>{{ item.meta }}</small>{% endif %}
+                    </span>
+                    <span class="row-end">
+                        {% if item.badge %}<em>{{ item.badge }}</em>{% endif %}
+                        {% if item.value %}<b>{{ item.value }}</b>{% endif %}
+                    </span>
+                </a>
+                {% empty %}
+                <div class="tile-empty">{{ tile.footer|default:DLUX_STRINGS.ui_no_items }}</div>
+                {% endfor %}
+            </div>
+            {% elif tile.kind == "compact-list" %}
+            <div class="tile-compact-list">
+                {% for item in tile.items %}
+                <div class="compact-row tone-{{ item.tone }}">
+                    <span>{{ item.label }}</span>
+                    <strong>{{ item.value }}</strong>
+                </div>
+                {% endfor %}
+            </div>
+            {% elif tile.kind == "rate" %}
+            <div class="tile-metric rate-metric">
+                <div class="metric-value">{{ tile.value }}{% if tile.unit %}<span>{{ tile.unit }}</span>{% endif %}</div>
+                <div class="metric-meta">{{ tile.meta }}</div>
+                {% if tile.footer %}<div class="rate-gap">{{ tile.footer }}</div>{% endif %}
+            </div>
+            {% else %}
+            <div class="tile-metric">
+                <div class="metric-value">{{ tile.value }}{% if tile.unit %}<span>{{ tile.unit }}</span>{% endif %}</div>
+                {% if tile.meta %}<div class="metric-meta">{{ tile.meta }}</div>{% endif %}
+                {% if tile.progress != None %}
+                <div class="tile-progress" aria-hidden="true"><span style="width: {{ tile.progress }}%"></span></div>
+                {% endif %}
+                {% if tile.footer %}<div class="metric-footer">{{ tile.footer }}</div>{% endif %}
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </section>
+    {% else %}
+    <section class="workspace-empty">
+        <i class="bi bi-grid-1x2"></i>
+        <h2>{{ DLUX_STRINGS.ui_no_dashboard_tiles|default:"No dashboard tiles available" }}</h2>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="{% static 'common/js/workspace_dashboard.js' %}?v=20260710a" nonce="{{ request.csp_nonce }}" defer></script>
+{% endblock %}

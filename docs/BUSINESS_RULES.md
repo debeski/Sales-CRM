@@ -96,7 +96,25 @@ pricing, stock or invoices.
   for first adoption, Purchase Invoices for normal inbound stock, and manual
   Stock Movements only for one-off corrections/adjustments.
 - Movements are applied atomically (`F()` expression) on insert.
-- Low stock = `track_stock and stock_qty ≤ reorder_level` (shown on the dashboard).
+- Low stock = `track_stock and stock_qty ≤ reorder_level` (shown on the Workspace dashboard).
+
+## Workspace dashboard
+
+The project-wide landing page is `/workspace/`. It is not a separate accounting
+source; it is a live operating surface over the same domain records. Tiles are
+created server-side only when the user has the matching permission, and the
+queries use the same dlux scope filtering plus project row ownership as the list
+views. A sales rep therefore sees their own sales/payment/customer tiles, a
+courier sees only assigned delivery work, and a manager/superuser sees the whole
+store.
+
+Users may hide, reorder, and resize tiles. Those layout preferences are stored
+per user in DjangoLux's reserved app-preferences namespace:
+`Profile.preferences["app"]["switch_pos.workspace_dashboard.v1"]`. Browser
+`localStorage` is kept only as a fallback and one-time migration source for older
+layouts. Layout preferences do not grant access to hidden data, change business
+records, or affect another user's layout. The older `/sales/dashboard/` page
+remains available as **Sales Overview** for a sales-centric screen.
 
 ## Opening stock (one-time bulk intake / رصيد افتتاحي)
 
@@ -225,7 +243,7 @@ unless they hold the matching `view_all_<model>` permission. Full rules in
 
 - A **sales rep** sees only **their own** invoices, customers and payments. Their
   customer book is private (two reps can each keep a "Mr. Ali" without collision).
-  Their dashboard sales figures and reports cover **only their own sales**.
+  Their Workspace/Sales Overview figures and reports cover **only their own sales**.
 - An invoice belongs to its **salesperson** (defaults to whoever created it). Only
   a **manager** can reassign it to another rep.
 - A **manager** sees and reports on the **whole store**, and assigns work.

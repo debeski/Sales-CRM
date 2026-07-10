@@ -27,6 +27,7 @@ urlpatterns = [
         DynamicModalManagerView.as_view(show_table=False),
         name="scoped_modal_manager",
     ),
+    path("", include(("common.urls", "common"), namespace="common")),
     path("", include("dlux.urls")),
 
 

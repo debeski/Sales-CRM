@@ -3,7 +3,7 @@
 ## Part 1: Project Related
 
 ### Current Verified Snapshot:
-Django POS/ERP on django-lux 1.3.2. Apps: finance, catalog, sales, common. USD-base pricing -> LYD via global ExchangeRate; sales invoices freeze rate/line prices/costs; purchase invoices post inbound stock. Caddy edge: erp.switchlibya.ly -> ERP; apex+www -> static portfolio. v0.2.3 in progress (untagged): receipts, print logo, dlux row menus/new-tab print, Opening Stock one-time intake, Purchase Invoices/Suppliers, row-scoped manual-LYD price sync. v0.2.2 tagged. Current test baseline: 91 pass.
+Django POS/ERP on django-lux; dev compose currently mounts dlux 1.4.2, host venv still has older dlux. Apps: finance, catalog, sales, common. USD-base pricing -> LYD via ExchangeRate; sales invoices freeze rate/line prices/costs; purchase invoices post inbound stock. v0.2.3 is tagged; VERSION/CHANGELOG now at v0.2.4 for Workspace dashboard. Current project test baseline: 97 pass, 1 dlux-version skip in host venv.
 
 ### Current Project Adopted Standards:
 - Scoped models via dlux ScopedModel; list pages via common.ScopedListView + dlux modal_manager.
@@ -27,6 +27,7 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [ ] Optional: inject per-list Add button into the filter bar (config "buttons") vs current separate top-right button.
   - [ ] Browser smoke-test modal edit/delete (row actions) — combobox verified via test client.
 - **Completed Recently:**
+  - [x] (v0.2.4) Workspace dashboard `/workspace/`: project-wide dlux-themed tile grid with permission/scope/ownership-filtered finance/sales/delivery/catalog tiles, quick actions, hide/show drawer, per-user dlux app-preferences layout (`switch_pos.workspace_dashboard.v1`) with localStorage fallback, AR/EN strings + parity test; existing `/sales/dashboard/` renamed visibly to Sales Overview.
   - [x] (v0.2.3) Purchase Invoice / inbound stock rework: added `Supplier`, `PurchaseInvoice`, `PurchaseInvoiceLine`, supplier combobox, product autofill grid, purchase attachment scan/PDF, list/detail/print with official logo + new-tab context print; posts Stock In movements linked by FK/reference; removed mistaken `Invoice.attachment` in merged `sales/0005`; Stock Movements now shows one-time Opening Stock/view-only record + Add Stock + Manual Movement.
   - [x] (v0.2.3) Opening Stock existing-product autofill now overwrites untouched row defaults (`0.00`, default unit) with selected product values for cost/markup/USD/LYD/category/unit/barcode, while preserving fields the user manually edited.
   - [x] (v0.2.3) Product/Opening Stock price sync: when `price_lyd_override` is filled, `cost_usd` changes now keep LYD fixed and recompute `price_usd` + `markup_percent`; blank LYD mode still keeps markup fixed and recomputes USD. `price_sync.js` supports `data-price-sync-row`; Opening Stock rows load it; extra modal scripts carry `?v=20260709a`.
@@ -38,10 +39,10 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [x] (v0.1.3-v0.1.5) Caddy edge + portfolio split, composer-updater topology, dashboard rates, customer/deposit comboboxes, translated filters/choices/permissions, seed demo.
 
 ### One-line info about last verified Tests:
-2026-07-10: 91 tests pass (`config.settings_dev_sqlite`) after merging sales `0006` into `0005`; `makemigrations --check --dry-run` and `git diff --check` clean.
+2026-07-10: Host venv 97 pass + 1 dlux-1.4.2 skip; dev compose dlux 1.4.2 focused workspace tests 6 pass; `check`, `makemigrations --check --dry-run`, `git diff --check` clean.
 
 ### One-line info about last time edited Docs:
-docs/BUSINESS_RULES.md, docs/OPERATIONS.md, docs/PERMISSIONS.md + CHANGELOG.md — documented Purchase Invoice/Supplier stock intake, attachment ownership, and Opening Stock one-time behavior.
+docs/BUSINESS_RULES.md, docs/OPERATIONS.md, docs/PERMISSIONS.md + CHANGELOG.md — documented `/workspace/` Home URL, tile permissions/scoping, and dlux app-preferences layout persistence.
 
 ## Part 2: Global
 

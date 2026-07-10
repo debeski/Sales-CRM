@@ -10,6 +10,8 @@ only their own records but a manager the whole store. See
 1. **Model-level (Django/dlux)** — *can this user touch invoices at all?* Enforced
    by `PermissionRequiredMixin` on every view (`raise_exception=True` → 403). Also
    drives the auto-discovered sidebar: no `view_delivery` → no "Deliveries" entry.
+   The project-wide `/workspace/` dashboard is discoverable when the user has at
+   least one permission that can produce a workspace tile or quick action.
 2. **Row-level (this project)** — *which invoices?* Each owned model declares an
    `OWNER_FIELDS` tuple and gains a `view_all_<model>` permission. A user sees a
    row if they are a **superuser**, hold **`view_all_<model>`**, or **own** it
@@ -35,7 +37,7 @@ payments list.
 | **Admin / Owner** | المسؤول | Django **superuser** | Everything |
 | **Sales Manager** | مدير المبيعات | **"Sales Manager"** | All reps' invoices/customers/payments/deliveries (holds every `view_all_*`), assigns salespeople & couriers, runs reports, manages catalog + rate, confirms deposits |
 | **Sales Representative** | مندوب المبيعات | **"Sales Representative"** | **Own** invoices/customers/payments only (no `view_all_*`) |
-| **Delivery Courier** | مندوب التوصيل | **"Delivery Courier"** | **Only deliveries assigned to them**; records cash collected. No access to invoices, reports, or the sales figures on the dashboard |
+| **Delivery Courier** | مندوب التوصيل | **"Delivery Courier"** | **Only deliveries assigned to them**; records cash collected. No access to invoices, reports, or sales-figure tiles |
 
 An invoice's `salesperson` defaults to whoever creates it; only a Manager
 (`assign_salesperson`) can reassign it. Same for a delivery's `assigned_to`
@@ -84,7 +86,11 @@ they're shared management data gated purely by these permissions; the Sales Mana
 group holds them, reps/couriers don't.
 
 Standard `view/add/change/delete` permissions exist for every model. Reports and
-the dashboard's sales figures are additionally row-scoped by the viewer.
+the Workspace/Sales Overview sales figures are additionally row-scoped by the
+viewer. Workspace tile order, hidden state, and size are stored per user in
+DjangoLux app preferences under `switch_pos.workspace_dashboard.v1`, with
+`localStorage` retained only as a fallback/migration layer; this is presentation
+only and never bypasses server-side permission or ownership checks.
 
 ## Assigning a user
 

@@ -84,7 +84,7 @@ language, theme). Health endpoint: `/health/`.
 1. Complete the setup wizard (set the Arabic/English system name + logo — these
    brand the printed sales invoice, payment receipt, and purchase invoice).
 2. **Finance → Exchange Rates → Add**: enter the current black-market USD→LYD rate.
-   The dashboard warns until this is done.
+   The Workspace dashboard warns until this is done.
 3. **Catalog → Categories / Products / Services**: add what you sell. For products,
    enter `cost_usd` + `markup_percent` (or a direct `price_usd`).
    - **Bulk shortcut for first setup:** **Catalog → Stock Movements → Opening
@@ -110,7 +110,8 @@ language, theme). Health endpoint: `/health/`.
 
 | Path | Page |
 |------|------|
-| `/sales/dashboard/` | Dashboard (set as Home URL in System Settings) |
+| `/workspace/` | Workspace dashboard (recommended Home URL in System Settings) |
+| `/sales/dashboard/` | Sales Overview (sales-focused legacy dashboard) |
 | `/sales/` | Invoices |
 | `/sales/new/` | New invoice editor |
 | `/catalog/` | Products & stock |
@@ -131,7 +132,8 @@ jobs are declared in `config/celery.py` under `app.conf.beat_schedule`:
 |------|----------|---------|
 | `finance.tasks.refresh_market_rates` | every 3h | Scrapes two USD→LYD reference rates and caches them (**no expiry** — replaced only by a later successful scrape): the **official** rate from [cbl.gov.ly](https://cbl.gov.ly/currency-exchange-rates/) (`finance:cbl_official_usd_rate`) and the **black-market** rate + trend from [eanlibya.com](https://www.eanlibya.com/exchangerate/) (`finance:ean_black_market_usd_rate`). |
 
-The **dashboard** shows both reference rates next to the in-house *custom* rate.
+The **Workspace dashboard** shows both reference rates next to the in-house
+*custom* rate when the viewer has a rate, sales, or catalog permission.
 Each scrape is server-side (the CSP `connect-src` blocks a browser cross-origin
 fetch) and independent — if one site is down its last cached value is kept while
 the other still updates. This is display-only — invoices always freeze the custom
@@ -194,7 +196,9 @@ Required repository **Secrets**: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (token 
 be a *Secret*, not a *Variable*). Deploy the published image with
 `WEB_IMAGE=debeski/sales:latest ./start.sh -d`.
 
-Set **System Settings → Home URL** to `/sales/dashboard/` to make the dashboard the landing page.
+Set **System Settings → Home URL** to `/workspace/` to make the project-wide
+Workspace dashboard the landing page. Keep `/sales/dashboard/` for the
+sales-only overview when a sales-centric screen is useful.
 
 ## Local development without Postgres/Redis
 

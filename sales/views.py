@@ -419,7 +419,7 @@ class PaymentCreateView(LoginRequiredMixin, PermissionRequiredMixin, View):
 
 
 # --------------------------------------------------------------------------- #
-# Dashboard (intended as the system home page)
+# Sales-focused overview. The project-wide landing dashboard is /workspace/.
 # --------------------------------------------------------------------------- #
 class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = "sales/dashboard.html"
@@ -431,7 +431,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         month_start = today.replace(day=1)
         live_statuses = [Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL, Invoice.STATUS_PAID]
 
-        # Role-aware home page. Every panel is both permission-gated (a delivery
+        # Role-aware overview. Every panel is both permission-gated (a delivery
         # courier has no view_invoice) and row-scoped: a rep's figures cover only
         # their own sales, a manager (view_all_invoice) sees the whole store.
         ctx["can_view_sales"] = user.has_perm("sales.view_invoice")

@@ -1,7 +1,7 @@
 DLUX_STRINGS = {
     "en": {
         "app_sales": "Sales",
-        "sales_dashboard": "Dashboard",
+        "sales_dashboard": "Sales Overview",
         "sales_report": "Sales Report",
         "model_customer": "Customer",
         "model_invoice": "Invoice",
@@ -103,7 +103,7 @@ DLUX_STRINGS = {
     },
     "ar": {
         "app_sales": "المبيعات",
-        "sales_dashboard": "لوحة المعلومات",
+        "sales_dashboard": "نظرة عامة على المبيعات",
         "sales_report": "تقرير المبيعات",
         "model_customer": "عميل",
         "model_invoice": "فاتورة",

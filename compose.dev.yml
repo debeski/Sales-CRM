@@ -25,7 +25,7 @@ services:
       - ./media/:/app/media/:rw
       - ./logs/:/app/logs:rw
     environment:
-      DLUX_BAKED_VERSION: "1.4.1"
+      DLUX_BAKED_VERSION: "1.4.2"
 
   caddy:
     # Local dev: plain HTTP only (no ACME/TLS), served on host port 90.
