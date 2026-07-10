@@ -1,11 +1,15 @@
 from django import forms
+from django.contrib.auth import get_user_model
 
+from dlux.forms import _build_archive_file_widget
 from dlux.translations import get_strings
 from dlux.utils import set_field_attrs
 
 from common.forms import build_grid_helper, translate_choice_fields, translate_help_text
 
-from .models import CashDeposit, ExchangeRate
+from .models import CashDeposit, ExchangeRate, Expense, ExpenseCategory, StaffAccount, StaffLedgerEntry
+
+User = get_user_model()
 
 
 class ExchangeRateForm(forms.ModelForm):
@@ -48,3 +52,92 @@ class CashDepositForm(forms.ModelForm):
         # key, so that per-instance note is preserved.
         translate_help_text(self)
         build_grid_helper(self, [("amount", "method"), ("deposited_at", "reference"), ("notes",)])
+
+
+class ExpenseCategoryForm(forms.ModelForm):
+    refresh_parent = True
+
+    class Meta:
+        model = ExpenseCategory
+        fields = ["name", "description", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        set_field_attrs(self)
+        translate_help_text(self)
+        build_grid_helper(self, [("name", "is_active"), ("description",)])
+
+
+class ExpenseForm(forms.ModelForm):
+    refresh_parent = True
+
+    class Meta:
+        model = Expense
+        fields = [
+            "category", "amount_lyd", "expense_date", "method", "paid_by",
+            "reference", "attachment", "notes",
+        ]
+        widgets = {"expense_date": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["category"].queryset = ExpenseCategory.objects.filter(is_active=True).order_by("name")
+        self.fields["paid_by"].required = False
+        self.fields["paid_by"].queryset = User.objects.filter(is_active=True).order_by("first_name", "username")
+        set_field_attrs(self)
+        translate_choice_fields(self)
+        translate_help_text(self)
+        self.fields["attachment"].widget = _build_archive_file_widget(
+            field_label=self.fields["attachment"].label,
+            show_scan=True,
+            attrs={"accept": "image/*,application/pdf"},
+        )
+        self.fields["attachment"].label = ""
+        build_grid_helper(self, [
+            ("category", "amount_lyd"),
+            ("expense_date", "method"),
+            ("paid_by", "reference"),
+            ("attachment",),
+            ("notes",),
+        ])
+
+
+class StaffAccountForm(forms.ModelForm):
+    refresh_parent = True
+
+    class Meta:
+        model = StaffAccount
+        fields = ["user", "is_active", "notes"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        used = StaffAccount.objects.exclude(pk=self.instance.pk).values_list("user_id", flat=True)
+        self.fields["user"].queryset = User.objects.filter(is_active=True).exclude(pk__in=used).order_by("first_name", "username")
+        set_field_attrs(self)
+        translate_help_text(self)
+        build_grid_helper(self, [("user", "is_active"), ("notes",)])
+
+
+class StaffLedgerEntryForm(forms.ModelForm):
+    refresh_parent = True
+
+    class Meta:
+        model = StaffLedgerEntry
+        fields = [
+            "account", "entry_type", "amount_lyd", "entry_date", "reference",
+            "requires_user_confirmation", "notes",
+        ]
+        widgets = {"entry_date": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["account"].queryset = StaffAccount.objects.filter(is_active=True).select_related("user").order_by("user__username")
+        set_field_attrs(self)
+        translate_choice_fields(self)
+        translate_help_text(self)
+        build_grid_helper(self, [
+            ("account", "entry_type"),
+            ("amount_lyd", "entry_date"),
+            ("reference", "requires_user_confirmation"),
+            ("notes",),
+        ])

@@ -31,7 +31,7 @@ from .tables import (
 
 
 def _product_autofill_map_json():
-    """JSON {pk: {cost, markup, price_usd, price_lyd, category, unit, barcode}}
+    """JSON {pk: {cost, markup, price_usd, price_lyd, category, unit, barcode, ...}}
     used by both Opening Stock and Purchase Invoice grids."""
     data = {}
     for p in Product.objects.all():
@@ -43,6 +43,8 @@ def _product_autofill_map_json():
             "category": str(p.category_id or ""),
             "unit": p.unit,
             "barcode": p.barcode,
+            "color": p.color or "",
+            "size": p.size or "",
         }
     return json.dumps(data)
 
@@ -62,6 +64,8 @@ def _save_product_from_intake_line(cd):
     product.unit = cd.get("unit") or product.unit
     if cd.get("barcode"):
         product.barcode = cd["barcode"]
+    product.color = cd.get("color") or None
+    product.size = cd.get("size") or None
     product.cost_usd = cd.get("cost_usd") or Decimal("0")
     product.markup_percent = cd.get("markup_percent") or Decimal("0")
     product.price_usd = cd.get("price_usd") or Decimal("0")
@@ -440,6 +444,8 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Vie
                     description=product.name,
                     unit=product.unit,
                     barcode=product.barcode,
+                    color=product.color,
+                    size=product.size,
                     cost_usd=product.cost_usd,
                     markup_percent=product.markup_percent,
                     price_usd=product.price_usd,
@@ -460,7 +466,7 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Vie
 
     def get(self, request):
         form = PurchaseInvoiceForm()
-        formset = PurchaseInvoiceLineFormSet(initial=[{} for _ in range(8)])
+        formset = PurchaseInvoiceLineFormSet(initial=[{}])
         return render(request, self.template_name, self._context(form, formset))
 
     def post(self, request):

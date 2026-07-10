@@ -18,17 +18,17 @@
           onsubmit="return confirm('{{ DLUX_STRINGS.ui_purchase_apply_confirm|default:"This will create or update products and post the purchased quantities into stock. Continue?" }}');">
         {% csrf_token %}
 
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_supplier_details|default:"Supplier & Details" }}</div>
-            <div class="card-body">
-                {% crispy form %}
-                <datalist id="supplier-datalist">
-                    {% for s in suppliers %}
-                    <option value="{{ s.name }}" data-id="{{ s.pk }}" data-phone="{{ s.phone }}" data-address="{{ s.address }}"></option>
-                    {% endfor %}
-                </datalist>
-            </div>
-        </div>
+        {# Borderless section — no solid white card surface, so the fields sit on
+           the themed page background instead of a stark white slab. #}
+        <section class="mb-4">
+            <h2 class="h6 fw-semibold mb-3">{{ DLUX_STRINGS.ui_supplier_details|default:"Supplier & Details" }}</h2>
+            {% crispy form %}
+            <datalist id="supplier-datalist">
+                {% for s in suppliers %}
+                <option value="{{ s.name }}" data-id="{{ s.pk }}" data-phone="{{ s.phone }}" data-address="{{ s.address }}"></option>
+                {% endfor %}
+            </datalist>
+        </section>
 
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
@@ -50,6 +50,8 @@
                                 <th style="min-width:150px">{{ DLUX_STRINGS.label_product_category|default:"Category" }}</th>
                                 <th style="min-width:110px">{{ DLUX_STRINGS.label_product_unit|default:"Unit" }}</th>
                                 <th style="min-width:130px">{{ DLUX_STRINGS.label_product_barcode|default:"Barcode" }}</th>
+                                <th style="min-width:150px">{{ DLUX_STRINGS.label_product_color|default:"Color" }}</th>
+                                <th style="min-width:150px">{{ DLUX_STRINGS.label_product_size|default:"Size / Spec" }}</th>
                                 <th class="text-end" style="min-width:110px">{{ DLUX_STRINGS.label_product_cost_usd|default:"Cost (USD)" }}</th>
                                 <th class="text-end" style="width:90px">{{ DLUX_STRINGS.label_product_markup_percent|default:"Markup %" }}</th>
                                 <th class="text-end" style="min-width:110px">{{ DLUX_STRINGS.label_product_price_usd|default:"Price (USD)" }}</th>
@@ -68,6 +70,8 @@
                                 <td>{{ itemform.category }}</td>
                                 <td>{{ itemform.unit }}</td>
                                 <td>{{ itemform.barcode }}</td>
+                                <td>{{ itemform.color }}</td>
+                                <td>{{ itemform.size }}</td>
                                 <td>{{ itemform.cost_usd }}</td>
                                 <td>{{ itemform.markup_percent }}</td>
                                 <td>{{ itemform.price_usd }}</td>
@@ -86,7 +90,7 @@
                         </tbody>
                         <tfoot>
                             <tr class="table-light">
-                                <td colspan="9" class="text-end fw-semibold">{{ DLUX_STRINGS.ui_total }}</td>
+                                <td colspan="12" class="text-end fw-semibold">{{ DLUX_STRINGS.ui_total }}</td>
                                 <td class="text-end fw-semibold" id="total-usd-cell">0.00</td>
                                 <td class="text-end fw-semibold" id="total-lyd-cell">0.00</td>
                                 <td></td>
@@ -120,6 +124,8 @@
         <td>{{ formset.empty_form.category }}</td>
         <td>{{ formset.empty_form.unit }}</td>
         <td>{{ formset.empty_form.barcode }}</td>
+        <td>{{ formset.empty_form.color }}</td>
+        <td>{{ formset.empty_form.size }}</td>
         <td>{{ formset.empty_form.cost_usd }}</td>
         <td>{{ formset.empty_form.markup_percent }}</td>
         <td>{{ formset.empty_form.price_usd }}</td>
@@ -140,6 +146,7 @@
 {% block scripts %}
 {{ block.super }}
 <script src="{% static 'catalog/js/price_sync.js' %}?v=20260709a" nonce="{{ request.csp_nonce }}" defer></script>
+<script src="{% static 'catalog/js/color_palette.js' %}?v=20260710a" nonce="{{ request.csp_nonce }}" defer></script>
 <script id="product-map" type="application/json">{{ product_map_json|safe }}</script>
 <script>
 (function () {
@@ -162,6 +169,7 @@
         if (el.dataset.userEdited === '1') return;
         el.value = (val === '' || val === undefined || val === null) ? '' : val;
         el.dataset.autofilled = '1';
+        el.dispatchEvent(new Event('change', {bubbles: true}));
     }
     function markManual(el) {
         if (document.activeElement !== el) return;
@@ -198,6 +206,8 @@
             setAuto(q(row, 'price_usd'), d.price_usd);
             setAuto(q(row, 'price_lyd_override'), d.price_lyd);
             setAuto(q(row, 'barcode'), d.barcode);
+            setAuto(q(row, 'color'), d.color);
+            setAuto(q(row, 'size'), d.size);
             setAuto(q(row, 'category'), d.category);
             setAuto(q(row, 'unit'), d.unit);
         }
@@ -209,7 +219,10 @@
             nameInput.addEventListener('input', () => syncRow(row));
             nameInput.addEventListener('change', () => syncRow(row));
         }
-        ['cost_usd', 'markup_percent', 'price_usd', 'price_lyd_override', 'barcode', 'category', 'unit'].forEach((f) => {
+        [
+            'cost_usd', 'markup_percent', 'price_usd', 'price_lyd_override', 'barcode',
+            'color', 'size', 'category', 'unit'
+        ].forEach((f) => {
             const el = q(row, f);
             if (el) el.addEventListener('input', () => { markManual(el); recalcAll(); });
             if (el) el.addEventListener('change', () => { markManual(el); recalcAll(); });
@@ -234,6 +247,7 @@
         body.appendChild(tr);
         totalForms.value = idx + 1;
         wireRow(tr);
+        if (window.initCatalogColorPalettes) window.initCatalogColorPalettes();
     });
 
     body.querySelectorAll('.line-row').forEach(wireRow);

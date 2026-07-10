@@ -88,13 +88,30 @@ class InvoiceForm(forms.ModelForm):
 class InvoiceItemForm(forms.ModelForm):
     class Meta:
         model = InvoiceItem
-        fields = ["kind", "product", "service", "description", "unit_price_lyd", "quantity"]
+        fields = [
+            "kind", "product", "service", "description", "color", "size",
+            "unit_price_lyd", "quantity",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Price may be left blank to auto-fill from the selected product/service.
         self.fields["unit_price_lyd"].required = False
         self.fields["description"].required = False
+        self.fields["color"].required = False
+        self.fields["size"].required = False
+        color_value = self.initial.get("color") or getattr(self.instance, "color", "") or ""
+        size_value = self.initial.get("size") or getattr(self.instance, "size", "") or ""
+        color_choices = [("", "---------")]
+        if color_value:
+            try:
+                from catalog.models import Product
+                color_label = dict(Product.COLOR_CHOICES).get(color_value, color_value)
+            except Exception:
+                color_label = color_value
+            color_choices.append((color_value, color_label))
+        self.fields["color"].widget = forms.Select(choices=color_choices)
+        self.fields["size"].widget = forms.Select(choices=[("", "---------"), *([(size_value, size_value)] if size_value else [])])
         set_field_attrs(self, inline_labels=True)
         translate_help_text(self)
 

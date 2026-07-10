@@ -10,7 +10,7 @@ from django.contrib.auth.models import Permission
 from django.test import RequestFactory, TestCase
 
 from catalog.models import Product
-from finance.models import ExchangeRate
+from finance.models import ExchangeRate, Expense
 from sales.models import Invoice, InvoiceItem, Payment
 from sales.reports import available_fiscal_years, build_financial_report, fiscal_year_window
 from sales.views import FinancialReportView
@@ -50,11 +50,35 @@ class FinancialReportTests(TestCase):
         self.assertEqual(r["invoice_count"], 1)
         self.assertEqual(r["cogs"], Decimal("30.00"))          # 3 × 2 USD × rate 5
         self.assertEqual(r["gross_profit"], Decimal("120.00"))
+        self.assertEqual(r["operating_expenses"], Decimal("0.00"))
+        self.assertEqual(r["net_profit"], Decimal("120.00"))
         self.assertEqual(r["margin_percent"].quantize(Decimal("0.1")), Decimal("80.0"))
         self.assertEqual(r["cash_collected"], Decimal("100.00"))
         self.assertEqual(r["receivables"], Decimal("50.00"))   # 150 − 100 outstanding
         self.assertEqual(r["inventory_value"], Decimal("100.00"))  # 10 × 2 USD × 5
         self.assertEqual(len(r["monthly"]), 1)
+
+    def test_posted_expenses_reduce_net_profit(self):
+        year = self.inv.invoice_date.year
+        d1, d2 = fiscal_year_window(year)
+        Expense.objects.create(
+            amount_lyd=Decimal("35.00"),
+            expense_date=self.inv.invoice_date,
+            status=Expense.STATUS_POSTED,
+            reference="rent",
+        )
+        Expense.objects.create(
+            amount_lyd=Decimal("15.00"),
+            expense_date=self.inv.invoice_date,
+            status=Expense.STATUS_DRAFT,
+            reference="not posted",
+        )
+
+        r = build_financial_report(d1, d2)
+
+        self.assertEqual(r["gross_profit"], Decimal("120.00"))
+        self.assertEqual(r["operating_expenses"], Decimal("35.00"))
+        self.assertEqual(r["net_profit"], Decimal("85.00"))
 
     def test_cogs_uses_frozen_line_cost(self):
         # Cost is frozen on the line at sale time — changing the product's cost

@@ -89,6 +89,20 @@ in the catalog lists and enlarged in the item's detail card. On a phone the uplo
 field offers the camera or the gallery. Purely descriptive — it never affects
 pricing, stock or invoices.
 
+## Product variant attributes
+
+Products may optionally carry descriptive variant fields: `color` and `size`.
+`color` is limited to the 15-color palette exposed in stock-intake rows (black,
+gray, white, red, blue, green, yellow, orange, purple, pink, brown, beige, navy,
+gold, teal). `size` is a free-form **Size / Spec** field for actual size,
+capacity, measurements, model-specific descriptors, or whatever the product
+requires. These fields are nullable/blankable and never affect pricing, stock
+quantity, valuation, or permissions. Staff set/update variants while posting
+Opening Stock or Purchase Invoices; Product create/edit stays focused on identity
+and pricing, while product list/detail views show the available variants. Purchase
+invoice lines and sales invoice item lines snapshot the values used at intake/sale
+time, so a later product variant change does not rewrite old documents.
+
 ## Inventory
 
 - `Product.stock_qty` is **only** changed through `StockMovement` (the ledger is
@@ -131,10 +145,11 @@ grid (`/catalog/stock-movements/opening-stock/`) where an admin enters many item
 at once, one per row:
 
 1. Each row is either a **new** item (type a name) or an **existing** one (pick
-   it from the datalist — cost/markup/price/category/unit/barcode autofill).
-   Fields: name, category, unit, barcode, import cost (USD), markup %, selling
-   price (USD), optional manual LYD price, and **quantity in storage**. Purchase
-   shop and date are intentionally omitted (irrelevant for an opening balance).
+   it from the datalist — product details and pricing autofill). Fields: name,
+   category, unit, barcode, optional color and size/spec, import cost (USD),
+   markup %, selling price (USD), optional manual LYD price, and **quantity in
+   storage**. Purchase shop and date are intentionally omitted (irrelevant for an
+   opening balance).
    Pricing cells use the same row-scoped live sync as the Product form: markup,
    USD selling price, cost, and manual LYD override stay consistent inside that
    row without changing any neighbouring row. Selecting an existing product
@@ -163,17 +178,27 @@ inbound-stock document that Opening Stock was never meant to be:
    `Supplier` record and snapshots supplier name/phone/address onto the invoice.
 2. The line grid reuses the Opening Stock product behavior. Each row is a new or
    existing `Product`; selecting an existing item autofills category, unit,
-   barcode, import cost, markup, USD selling price, and manual LYD price. Edits
-   to cost/markup/USD/manual-LYD use the same row-scoped price-sync rules as the
-   Product form.
+   barcode, color, size/spec, import cost, markup, USD selling price, and
+   manual LYD price. Edits to cost/markup/USD/manual-LYD use the same row-scoped
+   price-sync rules as the Product form.
 3. Submitting the invoice runs one transaction: it saves a `PurchaseInvoice` +
    `PurchaseInvoiceLine` snapshots, creates or updates the products, and posts
    one Stock In `StockMovement` per line with `reference=<purchase invoice no.>`
-   and `purchase_invoice` linked. This keeps `Product.stock_qty` ledger-driven
-   while giving staff an invoice-like document to view/print later.
+   and `purchase_invoice` linked. Line rows snapshot product color and size/spec
+   alongside cost/pricing. This keeps `Product.stock_qty`
+   ledger-driven while giving staff an invoice-like document to view/print later.
 4. Purchase invoices may carry the scan/photo/PDF attachment of the supplier's
    paper invoice (`PurchaseInvoice.attachment`, upload path
    `purchase_invoices/`). This is record-only and never affects totals or stock.
+
+## Sales invoice variant selection
+
+When adding a product line on a sales invoice, the editor reads the selected
+product's current color and size/spec from catalog storage metadata. If either
+value exists, the line shows it as a selectable option; if not, the field remains
+blank. Saving the invoice snapshots `InvoiceItem.color` and `InvoiceItem.size`,
+and detail/print views show those snapped values under the line description.
+Services and custom lines keep color/size blank.
 
 ## Stock take (physical inventory count / جرد)
 
@@ -209,8 +234,8 @@ in Libya. The **financial report** (`/sales/financial/`, gated by
 never per-rep. It reports:
 
 - **Period figures** (for the selected year): **revenue** (issued/partial/paid
-  invoices), **cost of goods (estimate)**, **gross profit** + margin, and **cash
-  collected** (payments received in the year).
+  invoices), **cost of goods**, **gross profit** + margin, **posted operating
+  expenses**, **net profit**, and **cash collected** (payments received in the year).
 - **Current snapshots** (point-in-time, labelled *current*): **outstanding
   receivables** and **inventory value**.
 
@@ -234,6 +259,35 @@ Technicians and delivery reps **record** the cash they collected (`pending`); an
 admin **confirms** or **rejects** it. Invoice payments may reference the deposit
 that carried their cash so the books reconcile. A staffer sees only the deposits
 they recorded; a manager (`view_all_cashdeposit`) sees all.
+
+## Expenses
+
+Generic operating costs live in `finance.Expense`, grouped optionally by
+`ExpenseCategory`. Posted expenses are the only ones subtracted from the
+financial report; draft expenses are record-in-progress, and void expenses stay
+auditable but inert. Each expense stores amount in LYD, date, payment method,
+optional payer, reference, notes, and an optional receipt/photo/PDF attachment
+using the same dlux archive/scanner widget used elsewhere. Expenses are owned by
+`paid_by` or `created_by`; managers hold `view_all_expense` and `post_expense`.
+
+## Staff accounts and credit
+
+Each relevant user may have one `finance.StaffAccount` for advances, loans, cash
+or item check-outs, reimbursements, service/commission earnings, and payments to
+or from the user. The account balance is derived from posted
+`StaffLedgerEntry` rows only:
+
+- Positive balance means the company owes the user.
+- Negative balance means the user owes the company.
+- Pending rows do not affect balance until confirmed.
+- Disputed and void rows remain visible for audit but do not affect balance.
+
+Managers create ledger entries. By default entries require user confirmation:
+dlux creates a persistent notification for the staff user and the row appears on
+their staff-account page with Confirm/Dispute actions. A manager with
+`resolve_staffledgerentry` can resolve or void entries. This keeps staff credit
+visible and confirmable without turning services, deliveries, loans, and cash
+hand-offs into separate complex subsystems.
 
 ## Who sees what (per-employee visibility)
 

@@ -8,7 +8,7 @@ soft-delete, reports, backups and notifications — this project adds only the s
 ## Apps & dependency layering
 
 ```
-finance   (money foundation: exchange rate + cash deposits)
+finance   (money foundation: exchange rate, cash deposits, expenses, staff accounts)
    ▲
 catalog   (products, services, stock ledger) — uses finance for conversion
    ▲

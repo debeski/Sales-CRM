@@ -17,9 +17,9 @@ class SupplierAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "sku", "category", "cost_usd", "price_usd", "stock_qty", "is_active")
-    list_filter = ("category", "unit", "is_active", "track_stock")
-    search_fields = ("name", "sku", "barcode")
+    list_display = ("name", "sku", "category", "color", "size", "cost_usd", "price_usd", "stock_qty", "is_active")
+    list_filter = ("category", "unit", "color", "is_active", "track_stock")
+    search_fields = ("name", "sku", "barcode", "size")
     readonly_fields = ("stock_qty",)
 
 

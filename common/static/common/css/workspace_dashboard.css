@@ -3,17 +3,30 @@
     --ws-surface: var(--table-row, var(--bs-body-bg, #ffffff));
     --ws-ink: var(--title, var(--bs-body-color, #1f2937));
     --ws-muted: var(--htitle, var(--bs-secondary-color, #6b7280));
-    --ws-line: rgba(var(--primal-rgb, 71, 85, 105), .18);
+    --ws-line: rgba(var(--primal-rgb, 71, 85, 105), .12);
+    --ws-gap: 1.35rem;
     --ws-green: #15803d;
+    --ws-green-rgb: 21, 128, 61;
     --ws-blue: #2563eb;
+    --ws-blue-rgb: 37, 99, 235;
     --ws-red: #dc2626;
+    --ws-red-rgb: 220, 38, 38;
     --ws-amber: #b45309;
+    --ws-amber-rgb: 180, 83, 9;
     --ws-violet: #7c3aed;
+    --ws-violet-rgb: 124, 58, 237;
     --ws-teal: #0f766e;
+    --ws-teal-rgb: 15, 118, 110;
     --ws-indigo: #4f46e5;
+    --ws-indigo-rgb: 79, 70, 229;
     --ws-cyan: #0891b2;
+    --ws-cyan-rgb: 8, 145, 178;
     --ws-purple: #9333ea;
+    --ws-purple-rgb: 147, 51, 234;
     --ws-slate: #475569;
+    --ws-slate-rgb: 71, 85, 105;
+    --ws-neutral: #374151;
+    --ws-neutral-rgb: 55, 65, 81;
     color: var(--ws-ink);
     padding: 1.5rem;
     background: var(--ws-bg);
@@ -24,14 +37,14 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 1.35rem;
 }
 
 .workspace-topbar h1 {
     margin: 0;
     font-size: 1.65rem;
     font-weight: 750;
-    letter-spacing: 0;
+    letter-spacing: -0.01em;
 }
 
 .workspace-topbar p {
@@ -43,88 +56,125 @@
 .tile-tools {
     display: flex;
     align-items: center;
-    gap: .45rem;
+    gap: .5rem;
 }
 
+/* Toolbar buttons + tile tools echo the dlux options card-handle: soft tinted
+   pill, primal on hover, gentle lift. */
 .workspace-icon-btn,
 .tile-tool {
-    border: 1px solid var(--ws-line);
-    background: var(--ws-surface);
-    color: var(--ws-ink);
+    border: 1px solid rgba(var(--primal-rgb, 71, 85, 105), .16);
+    background: rgba(var(--primal-rgb, 71, 85, 105), .045);
+    color: color-mix(in srgb, var(--ws-ink) 76%, var(--primal, #475569));
     min-height: 2.25rem;
     min-width: 2.25rem;
-    border-radius: .45rem;
+    border-radius: .9rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: .45rem;
     text-decoration: none;
-    box-shadow: 0 .05rem .2rem rgba(15, 23, 42, .06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5);
 }
 
 .workspace-icon-btn {
-    padding: 0 .75rem;
+    padding: 0 .9rem;
+    font-weight: 700;
 }
 
 .workspace-icon-btn:hover,
+.workspace-icon-btn:focus-visible,
 .tile-tool:hover,
-.action-chip:hover {
-    border-color: rgba(var(--primal-rgb, 71, 85, 105), .38);
-    color: var(--ws-ink);
+.tile-tool:focus-visible {
+    border-color: rgba(var(--primal-rgb, 71, 85, 105), .34);
+    background: rgba(var(--primal-rgb, 71, 85, 105), .1);
+    color: var(--primal, #475569);
+    transform: translateY(-1px);
 }
 
+/* Customize / hide drawer: same glass panel treatment as an options card. */
 .workspace-drawer {
+    position: relative;
+    overflow: hidden;
     border: 1px solid var(--ws-line);
-    background: color-mix(in srgb, var(--ws-surface) 94%, var(--ws-bg));
-    border-radius: .55rem;
-    padding: .85rem;
-    margin-bottom: 1rem;
+    border-radius: 1.4rem;
+    padding: 1.15rem 1.35rem 1.25rem;
+    margin-bottom: var(--ws-gap);
+    background: linear-gradient(160deg, rgba(255, 255, 255, .94), rgba(var(--primal-rgb, 71, 85, 105), .055));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .45),
+        0 16px 30px -28px rgba(15, 23, 42, .28);
+}
+
+.workspace-drawer::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 4px;
+    background: linear-gradient(90deg, rgba(var(--primal-rgb, 71, 85, 105), .88), rgba(var(--primal-rgb, 71, 85, 105), .22));
 }
 
 .workspace-drawer-head {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: .7rem;
+    margin-bottom: .85rem;
+    font-weight: 700;
+    color: var(--ws-ink);
 }
 
 .workspace-drawer-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-    gap: .5rem;
+    gap: .6rem;
 }
 
 .workspace-toggle {
     display: flex;
     align-items: center;
     gap: .5rem;
-    min-height: 2.25rem;
-    padding: .35rem .55rem;
-    border: 1px solid var(--ws-line);
-    border-radius: .45rem;
+    min-height: 2.5rem;
+    padding: .5rem .85rem;
+    border: 1px solid rgba(var(--primal-rgb, 71, 85, 105), .12);
+    border-radius: 1rem;
+    background: rgba(var(--primal-rgb, 71, 85, 105), .045);
+    font-weight: 650;
     margin: 0;
 }
 
 .workspace-grid {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: .85rem;
+    gap: var(--ws-gap);
     align-items: stretch;
 }
 
+/* Tile = dlux options panel: rounded glass surface, inset highlight, soft drop
+   shadow, and a thin gradient accent bar across the top (tone-coloured). */
 .workspace-tile {
     --tile-accent: var(--ws-slate);
+    --tile-accent-rgb: 71, 85, 105;
     position: relative;
     grid-column: span 3;
     min-height: 10rem;
-    background: var(--ws-surface);
-    border: 1px solid var(--ws-line);
-    border-top: .28rem solid var(--tile-accent);
-    border-radius: .55rem;
     overflow: hidden;
-    box-shadow: 0 .12rem .45rem rgba(15, 23, 42, .07);
+    border: 1px solid var(--ws-line);
+    border-radius: 1.4rem;
+    background: linear-gradient(160deg, rgba(255, 255, 255, .94), rgba(var(--primal-rgb, 71, 85, 105), .055));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .45),
+        0 16px 30px -28px rgba(15, 23, 42, .28);
     display: flex;
     flex-direction: column;
+}
+
+.workspace-tile::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 4px;
+    background: linear-gradient(90deg, rgba(var(--tile-accent-rgb), .88), rgba(var(--tile-accent-rgb), .22));
+    z-index: 1;
 }
 
 .workspace-tile[hidden] {
@@ -137,12 +187,16 @@
 .workspace-tile[data-size="xl"] { grid-column: span 8; }
 
 .workspace-tile.is-dragging {
-    opacity: .42;
+    opacity: .55;
+    transform: scale(.985);
 }
 
 .workspace-tile.drag-target {
-    outline: .15rem solid var(--tile-accent);
-    outline-offset: .12rem;
+    border-color: rgba(var(--primal-rgb, 71, 85, 105), .34);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .45),
+        0 0 0 .16rem rgba(var(--primal-rgb, 71, 85, 105), .08),
+        0 18px 34px -28px rgba(15, 23, 42, .3);
 }
 
 .tile-chrome {
@@ -150,19 +204,32 @@
     align-items: center;
     justify-content: space-between;
     gap: .75rem;
-    padding: .75rem .8rem .35rem;
+    padding: 1.05rem 1.1rem .4rem;
 }
 
 .tile-title {
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: .45rem;
-    font-weight: 700;
+    gap: .6rem;
+    font-weight: 750;
+    letter-spacing: -0.01em;
+    color: var(--ws-ink);
 }
 
+/* Icon badge — tinted rounded square, matching the dlux options h4 icon. */
 .tile-title i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: .85rem;
+    background: rgba(var(--tile-accent-rgb), .12);
     color: var(--tile-accent);
+    box-shadow: inset 0 0 0 1px rgba(var(--tile-accent-rgb), .16);
+    font-size: 1.02rem;
 }
 
 .tile-title span {
@@ -172,7 +239,7 @@
 }
 
 .tile-tools {
-    opacity: .75;
+    opacity: .7;
 }
 
 .workspace-tile:hover .tile-tools,
@@ -181,34 +248,51 @@
 }
 
 .tile-tool {
-    min-width: 1.9rem;
-    min-height: 1.9rem;
-    box-shadow: none;
-    background: var(--hbody, #f9fafb);
+    min-width: 1.95rem;
+    min-height: 1.95rem;
+    border-radius: .7rem;
 }
 
 .drag-handle {
     cursor: grab;
+    border-style: dashed;
+    border-color: rgba(var(--primal-rgb, 71, 85, 105), .22);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
 }
 
 .tile-metric {
-    padding: .3rem .9rem .9rem;
+    padding: .3rem 1.1rem 1.1rem;
     margin-top: auto;
+    text-align: start;
 }
 
+/* Number + currency read as one LTR pair (digits and the Latin unit are both
+   LTR) with a baseline-aligned gap, so they never collide. The block is still
+   parked at the card's inline-start via the parent's `text-align: start`
+   (right in Arabic, left in English) instead of a full-width flex that would
+   force it to one physical side. */
 .metric-value {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .4rem;
+    direction: ltr;
     font-size: clamp(1.45rem, 1.45rem + .35vw, 2rem);
     line-height: 1.05;
     font-weight: 800;
-    letter-spacing: 0;
+    letter-spacing: -0.01em;
     overflow-wrap: anywhere;
+    color: var(--ws-ink);
 }
 
 .metric-value span {
-    font-size: .82rem;
+    font-size: .8rem;
     color: var(--ws-muted);
     font-weight: 700;
-    margin-inline-start: .25rem;
+    letter-spacing: .02em;
+    white-space: nowrap;
 }
 
 .metric-meta,
@@ -241,7 +325,7 @@
 .tile-list,
 .tile-compact-list,
 .tile-actions {
-    padding: .35rem .75rem .8rem;
+    padding: .4rem 1.1rem 1rem;
 }
 
 .tile-row,
@@ -253,7 +337,7 @@
     min-height: 2.55rem;
     color: var(--ws-ink);
     text-decoration: none;
-    border-bottom: 1px solid rgba(var(--primal-rgb, 71, 85, 105), .12);
+    border-bottom: 1px solid rgba(var(--primal-rgb, 71, 85, 105), .1);
 }
 
 .tile-row:last-child,
@@ -298,25 +382,48 @@
 .tile-actions {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-    gap: .55rem;
+    gap: .6rem;
     margin-top: auto;
 }
 
+/* Quick-action chips echo the dlux system-settings tiles. */
 .action-chip {
     display: flex;
     align-items: center;
-    gap: .5rem;
-    min-height: 2.55rem;
-    padding: .45rem .6rem;
-    color: var(--ws-ink);
+    gap: .6rem;
+    min-height: 2.7rem;
+    padding: .5rem .75rem;
+    color: color-mix(in srgb, var(--ws-ink) 82%, var(--primal, #475569));
     text-decoration: none;
-    border: 1px solid var(--ws-line);
-    border-radius: .5rem;
-    background: var(--hbody, #f9fafb);
+    border: 1px solid rgba(var(--primal-rgb, 71, 85, 105), .16);
+    border-radius: 1rem;
+    background: linear-gradient(145deg, rgba(var(--primal-rgb, 71, 85, 105), .072), rgba(255, 255, 255, .76));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5);
+    font-weight: 700;
+}
+
+.action-chip:hover,
+.action-chip:focus-visible {
+    transform: translateY(-2px);
+    border-color: rgba(var(--primal-rgb, 71, 85, 105), .34);
+    background: linear-gradient(145deg, rgba(var(--primal-rgb, 71, 85, 105), .13), rgba(255, 255, 255, .88));
+    color: var(--primal, #475569);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .58),
+        0 12px 24px -22px rgba(var(--primal-rgb, 71, 85, 105), .5);
 }
 
 .action-chip i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    border-radius: .75rem;
+    background: rgba(var(--tile-accent-rgb), .12);
     color: var(--tile-accent);
+    box-shadow: inset 0 0 0 1px rgba(var(--tile-accent-rgb), .16);
 }
 
 .tile-empty,
@@ -327,14 +434,19 @@
 }
 
 .workspace-empty {
+    position: relative;
+    overflow: hidden;
     border: 1px solid var(--ws-line);
-    border-radius: .55rem;
-    background: var(--ws-surface);
+    border-radius: 1.4rem;
+    background: linear-gradient(160deg, rgba(255, 255, 255, .94), rgba(var(--primal-rgb, 71, 85, 105), .055));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .45),
+        0 16px 30px -28px rgba(15, 23, 42, .28);
 }
 
 .workspace-empty i {
     font-size: 2rem;
-    color: var(--ws-slate);
+    color: var(--primal, #475569);
 }
 
 .workspace-empty h2 {
@@ -342,17 +454,17 @@
     margin: .5rem 0 0;
 }
 
-.tone-green { --tile-accent: var(--ws-green); }
-.tone-blue { --tile-accent: var(--ws-blue); }
-.tone-red { --tile-accent: var(--ws-red); }
-.tone-amber { --tile-accent: var(--ws-amber); }
-.tone-violet { --tile-accent: var(--ws-violet); }
-.tone-teal { --tile-accent: var(--ws-teal); }
-.tone-indigo { --tile-accent: var(--ws-indigo); }
-.tone-cyan { --tile-accent: var(--ws-cyan); }
-.tone-purple { --tile-accent: var(--ws-purple); }
-.tone-slate { --tile-accent: var(--ws-slate); }
-.tone-neutral { --tile-accent: #374151; }
+.tone-green { --tile-accent: var(--ws-green); --tile-accent-rgb: var(--ws-green-rgb); }
+.tone-blue { --tile-accent: var(--ws-blue); --tile-accent-rgb: var(--ws-blue-rgb); }
+.tone-red { --tile-accent: var(--ws-red); --tile-accent-rgb: var(--ws-red-rgb); }
+.tone-amber { --tile-accent: var(--ws-amber); --tile-accent-rgb: var(--ws-amber-rgb); }
+.tone-violet { --tile-accent: var(--ws-violet); --tile-accent-rgb: var(--ws-violet-rgb); }
+.tone-teal { --tile-accent: var(--ws-teal); --tile-accent-rgb: var(--ws-teal-rgb); }
+.tone-indigo { --tile-accent: var(--ws-indigo); --tile-accent-rgb: var(--ws-indigo-rgb); }
+.tone-cyan { --tile-accent: var(--ws-cyan); --tile-accent-rgb: var(--ws-cyan-rgb); }
+.tone-purple { --tile-accent: var(--ws-purple); --tile-accent-rgb: var(--ws-purple-rgb); }
+.tone-slate { --tile-accent: var(--ws-slate); --tile-accent-rgb: var(--ws-slate-rgb); }
+.tone-neutral { --tile-accent: var(--ws-neutral); --tile-accent-rgb: var(--ws-neutral-rgb); }
 
 .compact-row.tone-paid strong,
 .tile-row.tone-paid .row-end { color: var(--ws-green); }
@@ -365,6 +477,90 @@
 .compact-row.tone-danger strong,
 .tile-row.tone-danger .row-end { color: var(--ws-red); }
 
+/* ===== Dark / rich themes — mirror the dlux options-panel overrides ===== */
+:root.theme-dark .workspace-shell,
+:root.theme-retro .workspace-shell,
+:root.theme-gothic .workspace-shell,
+:root.theme-prism .workspace-shell,
+:root.theme-aether .workspace-shell,
+:root.theme-neon .workspace-shell {
+    --ws-green: #4ade80;
+    --ws-green-rgb: 74, 222, 128;
+    --ws-blue: #60a5fa;
+    --ws-blue-rgb: 96, 165, 250;
+    --ws-red: #f87171;
+    --ws-red-rgb: 248, 113, 113;
+    --ws-amber: #fbbf24;
+    --ws-amber-rgb: 251, 191, 36;
+    --ws-violet: #a78bfa;
+    --ws-violet-rgb: 167, 139, 250;
+    --ws-teal: #2dd4bf;
+    --ws-teal-rgb: 45, 212, 191;
+    --ws-indigo: #818cf8;
+    --ws-indigo-rgb: 129, 140, 248;
+    --ws-cyan: #22d3ee;
+    --ws-cyan-rgb: 34, 211, 238;
+    --ws-purple: #c084fc;
+    --ws-purple-rgb: 192, 132, 252;
+    --ws-slate: #cbd5e1;
+    --ws-slate-rgb: 203, 213, 225;
+    --ws-neutral: #d1d5db;
+    --ws-neutral-rgb: 209, 213, 219;
+}
+
+:root.theme-dark .workspace-tile,
+:root.theme-retro .workspace-tile,
+:root.theme-gothic .workspace-tile,
+:root.theme-prism .workspace-tile,
+:root.theme-aether .workspace-tile,
+:root.theme-neon .workspace-tile,
+:root.theme-dark .workspace-drawer,
+:root.theme-retro .workspace-drawer,
+:root.theme-gothic .workspace-drawer,
+:root.theme-prism .workspace-drawer,
+:root.theme-aether .workspace-drawer,
+:root.theme-neon .workspace-drawer,
+:root.theme-dark .workspace-empty,
+:root.theme-retro .workspace-empty,
+:root.theme-gothic .workspace-empty,
+:root.theme-prism .workspace-empty,
+:root.theme-aether .workspace-empty,
+:root.theme-neon .workspace-empty {
+    background: linear-gradient(160deg, rgba(var(--primal-rgb), .08), rgba(255, 255, 255, .02)) !important;
+    border-color: rgba(var(--primal-rgb), .18) !important;
+}
+
+:root.theme-dark .workspace-toggle,
+:root.theme-retro .workspace-toggle,
+:root.theme-gothic .workspace-toggle,
+:root.theme-prism .workspace-toggle,
+:root.theme-aether .workspace-toggle,
+:root.theme-neon .workspace-toggle,
+:root.theme-dark .workspace-icon-btn,
+:root.theme-retro .workspace-icon-btn,
+:root.theme-gothic .workspace-icon-btn,
+:root.theme-prism .workspace-icon-btn,
+:root.theme-aether .workspace-icon-btn,
+:root.theme-neon .workspace-icon-btn,
+:root.theme-dark .tile-tool,
+:root.theme-retro .tile-tool,
+:root.theme-gothic .tile-tool,
+:root.theme-prism .tile-tool,
+:root.theme-aether .tile-tool,
+:root.theme-neon .tile-tool,
+:root.theme-dark .action-chip,
+:root.theme-retro .action-chip,
+:root.theme-gothic .action-chip,
+:root.theme-prism .action-chip,
+:root.theme-aether .action-chip,
+:root.theme-neon .action-chip {
+    background: linear-gradient(145deg, rgba(var(--primal-rgb), .08), rgba(255, 255, 255, .016)) !important;
+    border-color: rgba(var(--primal-rgb), .2) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .035),
+        0 8px 18px -18px rgba(0, 0, 0, .72) !important;
+}
+
 @media (max-width: 1200px) {
     .workspace-tile[data-size="s"],
     .workspace-tile[data-size="m"] { grid-column: span 6; }
@@ -375,6 +571,7 @@
 @media (max-width: 720px) {
     .workspace-shell {
         padding: 1rem;
+        --ws-gap: 1rem;
     }
     .workspace-topbar {
         flex-direction: column;
@@ -397,10 +594,13 @@
     .workspace-icon-btn,
     .tile-tool,
     .action-chip {
-        transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+        transition: border-color .18s ease, box-shadow .2s ease, transform .2s ease, background .18s ease, color .18s ease;
     }
     .workspace-tile:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 .3rem .9rem rgba(15, 23, 42, .1);
+        transform: translateY(-2px);
+        border-color: rgba(var(--primal-rgb, 71, 85, 105), .22);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, .45),
+            0 20px 34px -26px rgba(15, 23, 42, .32);
     }
 }

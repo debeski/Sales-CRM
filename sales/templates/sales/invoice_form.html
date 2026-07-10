@@ -19,19 +19,19 @@
     <form method="post" novalidate>
         {% csrf_token %}
 
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.ui_customer_details }}</div>
-            <div class="card-body">
-                {# {% crispy %} TAG, not the |crispy filter — the filter drops form.helper (the multi-column grid). #}
-                {% crispy form %}
-                {# Suggestions for the customer combobox (one search-and-add field). #}
-                <datalist id="customer-datalist">
-                    {% for c in customers %}
-                    <option value="{{ c.name }}" data-id="{{ c.pk }}" data-phone="{{ c.phone }}" data-address="{{ c.address }}"></option>
-                    {% endfor %}
-                </datalist>
-            </div>
-        </div>
+        {# Borderless section — no solid white card surface, so the fields sit on
+           the themed page background instead of a stark white slab. #}
+        <section class="mb-4">
+            <h2 class="h6 fw-semibold mb-3">{{ DLUX_STRINGS.ui_customer_details }}</h2>
+            {# {% crispy %} TAG, not the |crispy filter — the filter drops form.helper (the multi-column grid). #}
+            {% crispy form %}
+            {# Suggestions for the customer combobox (one search-and-add field). #}
+            <datalist id="customer-datalist">
+                {% for c in customers %}
+                <option value="{{ c.name }}" data-id="{{ c.pk }}" data-phone="{{ c.phone }}" data-address="{{ c.address }}"></option>
+                {% endfor %}
+            </datalist>
+        </section>
 
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
@@ -52,6 +52,8 @@
                                 <th style="min-width:180px">{{ DLUX_STRINGS.label_product }}</th>
                                 <th style="min-width:180px">{{ DLUX_STRINGS.label_service }}</th>
                                 <th style="min-width:160px">{{ DLUX_STRINGS.ui_description }}</th>
+                                <th style="min-width:130px">{{ DLUX_STRINGS.label_invoiceitem_color|default:"Color" }}</th>
+                                <th style="min-width:150px">{{ DLUX_STRINGS.label_invoiceitem_size|default:"Size / Spec" }}</th>
                                 <th class="text-end" style="min-width:120px">{{ DLUX_STRINGS.ui_unit_price_lyd }}</th>
                                 <th class="text-end" style="width:100px">{{ DLUX_STRINGS.ui_qty }}</th>
                                 <th class="text-end" style="min-width:120px">{{ DLUX_STRINGS.ui_total }}</th>
@@ -65,6 +67,8 @@
                                 <td>{{ itemform.product }}</td>
                                 <td>{{ itemform.service }}</td>
                                 <td>{{ itemform.description }}</td>
+                                <td>{{ itemform.color }}</td>
+                                <td>{{ itemform.size }}</td>
                                 <td>{{ itemform.unit_price_lyd }}</td>
                                 <td>{{ itemform.quantity }}</td>
                                 <td class="text-end fw-semibold line-total">0.00</td>
@@ -79,7 +83,7 @@
                         </tbody>
                         <tfoot>
                             <tr class="table-light">
-                                <td colspan="5" class="text-end fw-semibold">{{ DLUX_STRINGS.ui_subtotal }}</td>
+                                <td colspan="7" class="text-end fw-semibold">{{ DLUX_STRINGS.ui_subtotal }}</td>
                                 <td class="text-end fw-semibold" id="subtotal-cell">0.00</td>
                                 <td></td>
                             </tr>
@@ -106,6 +110,8 @@
         <td>{{ formset.empty_form.product }}</td>
         <td>{{ formset.empty_form.service }}</td>
         <td>{{ formset.empty_form.description }}</td>
+        <td>{{ formset.empty_form.color }}</td>
+        <td>{{ formset.empty_form.size }}</td>
         <td>{{ formset.empty_form.unit_price_lyd }}</td>
         <td>{{ formset.empty_form.quantity }}</td>
         <td class="text-end fw-semibold line-total">0.00</td>
@@ -150,13 +156,32 @@
         document.getElementById('subtotal-cell').textContent = fmt(subtotal);
     }
 
+    function setSelectOptions(select, value, label) {
+        if (!select) return;
+        const selected = value || '';
+        const text = label || value || '---------';
+        select.innerHTML = '';
+        select.add(new Option('---------', ''));
+        if (selected) select.add(new Option(text, selected));
+        select.value = selected;
+    }
+
     function autofill(row, kind, id) {
         const map = prices[kind] || {};
+        const entry = map[id];
+        const price = (entry && typeof entry === 'object') ? entry.price : entry;
         const priceInput = q(row, 'unit_price_lyd');
         const kindInput = q(row, 'kind');
         if (kindInput) kindInput.value = kind;
-        if (priceInput && map[id] !== undefined && !priceInput.dataset.touched) {
-            priceInput.value = map[id];
+        if (priceInput && price !== undefined && !priceInput.dataset.touched) {
+            priceInput.value = price;
+        }
+        if (kind === 'product') {
+            setSelectOptions(q(row, 'color'), entry?.color || '', entry?.color_label || entry?.color || '');
+            setSelectOptions(q(row, 'size'), entry?.size || '', entry?.size || '');
+        } else {
+            setSelectOptions(q(row, 'color'), '', '');
+            setSelectOptions(q(row, 'size'), '', '');
         }
         recalcAll();
     }

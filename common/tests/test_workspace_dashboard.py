@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -63,6 +64,7 @@ class WorkspaceDashboardTests(TestCase):
         self.assertIn("data-workspace-dashboard", html)
         self.assertIn("data-dashboard-grid", html)
         self.assertIn("data-dashboard-customize", html)
+        self.assertIn("common/css/workspace_dashboard.css?v=20260710d", html)
         self.assertIn("common/js/workspace_dashboard.js", html)
         self.assertIn(WORKSPACE_PREF_NAMESPACE, html)
         self.assertIn('data-widget-id="quick_actions"', html)
@@ -167,3 +169,16 @@ class WorkspaceDashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         user.profile.refresh_from_db()
         self.assertEqual(user.profile.preferences["app"][WORKSPACE_PREF_NAMESPACE], payload)
+
+    def test_workspace_tile_css_covers_aether_rich_theme(self):
+        css_path = Path(__file__).resolve().parents[1] / "static" / "common" / "css" / "workspace_dashboard.css"
+        css = css_path.read_text(encoding="utf-8")
+
+        self.assertIn(":root.theme-aether .workspace-shell", css)
+        self.assertIn(":root.theme-aether .workspace-tile", css)
+        self.assertIn(":root.theme-aether .workspace-drawer", css)
+        self.assertIn(":root.theme-aether .workspace-empty", css)
+        self.assertIn(":root.theme-aether .tile-tool", css)
+        self.assertIn(":root.theme-aether .action-chip", css)
+        self.assertIn("--ws-green-rgb: 74, 222, 128;", css)
+        self.assertIn("--tile-accent-rgb: var(--ws-green-rgb);", css)

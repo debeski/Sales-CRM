@@ -19,6 +19,25 @@ class ProductTableRenderTests(TestCase):
         self.assertIn("—", str(cell))
 
 
+class ProductVariantFieldTests(TestCase):
+    def test_color_palette_has_15_common_unique_choices(self):
+        from catalog.models import Product
+
+        values = [value for value, _label in Product.COLOR_CHOICES]
+        self.assertEqual(len(values), 15)
+        self.assertEqual(len(values), len(set(values)))
+        self.assertEqual(values.count(Product.COLOR_BLACK), 1)
+        self.assertEqual(values.count(Product.COLOR_GRAY), 1)
+        self.assertEqual(values.count(Product.COLOR_WHITE), 1)
+
+    def test_product_form_keeps_variants_out_of_manual_product_create(self):
+        from catalog.forms import ProductForm
+
+        form = ProductForm()
+        self.assertNotIn("color", form.fields)
+        self.assertNotIn("size", form.fields)
+
+
 class ProductPricingConsistencyTests(TestCase):
     """The detail view read a stored ``price_usd`` of 0 when only cost + markup
     were entered. save() now persists the derived selling price so detail views
@@ -69,3 +88,10 @@ class HelpTextTranslationTests(TestCase):
         # Arabic help text should not be the English literal.
         self.assertNotIn("Auto-filled", help_text)
         self.assertIn("تلقائياً", help_text)
+
+
+class CatalogTranslationParityTests(TestCase):
+    def test_english_and_arabic_keys_match(self):
+        from catalog.translations import DLUX_STRINGS
+
+        self.assertEqual(set(DLUX_STRINGS["en"]), set(DLUX_STRINGS["ar"]))

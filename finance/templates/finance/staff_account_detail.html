@@ -1,0 +1,71 @@
+{% extends "dlux/base.html" %}
+{% load dlux_tags %}
+{% block title %}{{ DLUX_STRINGS.page_staff_accounts|default:"Staff Accounts" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="h3 mb-1">{{ account }}</h1>
+            <p class="text-muted mb-0">{{ DLUX_STRINGS.ui_staff_account_balance_note|default:"Positive balance means the company owes the user; negative means the user owes the company." }}</p>
+        </div>
+        <div class="text-end">
+            <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.label_staffaccount_balance|default:"Balance" }}</div>
+            <div class="h3 mb-0 {% if balance < 0 %}text-danger{% else %}text-success{% endif %}">{{ balance|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent fw-semibold">{{ DLUX_STRINGS.page_staff_ledger_entries|default:"Staff Ledger" }}</div>
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>{{ DLUX_STRINGS.label_staffledgerentry_entry_date|default:"Date" }}</th>
+                        <th>{{ DLUX_STRINGS.label_staffledgerentry_entry_type|default:"Type" }}</th>
+                        <th>{{ DLUX_STRINGS.label_staffledgerentry_reference|default:"Reference" }}</th>
+                        <th class="text-end">{{ DLUX_STRINGS.label_staffledgerentry_amount_lyd|default:"Amount" }}</th>
+                        <th class="text-end">{{ DLUX_STRINGS.label_staffledgerentry_signed_amount|default:"Signed" }}</th>
+                        <th>{{ DLUX_STRINGS.label_staffledgerentry_status|default:"Status" }}</th>
+                        <th class="text-end">{{ DLUX_STRINGS.ui_actions|default:"Actions" }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                    <tr>
+                        <td>{{ entry.entry_date }}</td>
+                        <td>{{ DLUX_STRINGS|get_item:entry.entry_type_key|default:entry.get_entry_type_display }}</td>
+                        <td>{{ entry.reference|default:"-" }}</td>
+                        <td class="text-end">{{ entry.amount_lyd|floatformat:2 }}</td>
+                        <td class="text-end {% if entry.signed_amount < 0 %}text-danger{% else %}text-success{% endif %}">{{ entry.signed_amount|floatformat:2 }}</td>
+                        <td>{{ DLUX_STRINGS|get_item:entry.status_key|default:entry.get_status_display }}</td>
+                        <td class="text-end">
+                            {% if entry.status == "pending_user" %}
+                                {% if request.user == account.user or perms.finance.resolve_staffledgerentry %}
+                                <form method="post" action="{% url 'finance:staff_ledger_entry_action' entry.pk 'confirm' %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-success rounded-pill">{{ DLUX_STRINGS.ui_confirm|default:"Confirm" }}</button>
+                                </form>
+                                <form method="post" action="{% url 'finance:staff_ledger_entry_action' entry.pk 'dispute' %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-outline-warning rounded-pill">{{ DLUX_STRINGS.ui_dispute|default:"Dispute" }}</button>
+                                </form>
+                                {% endif %}
+                            {% endif %}
+                            {% if perms.finance.resolve_staffledgerentry and entry.status != "void" %}
+                            <form method="post" action="{% url 'finance:staff_ledger_entry_action' entry.pk 'void' %}" class="d-inline">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-outline-danger rounded-pill">{{ DLUX_STRINGS.ui_void|default:"Void" }}</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center text-muted py-4">{{ DLUX_STRINGS.ui_no_entries|default:"No entries yet." }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

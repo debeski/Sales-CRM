@@ -59,7 +59,10 @@ class ProductTable(DluxTable):
 
     class Meta(DluxTable.Meta):
         model = Product
-        fields = ("image", "name", "sku", "barcode", "category", "unit", "stock_qty", "price_lyd", "is_active")
+        fields = (
+            "image", "name", "sku", "barcode", "category", "unit", "color", "size",
+            "stock_qty", "price_lyd", "is_active",
+        )
         dlux_actions = True
 
     def render_image(self, record):
@@ -70,6 +73,9 @@ class ProductTable(DluxTable):
 
     def render_unit(self, record):
         return t(f"unit_{record.unit}", record.get_unit_display())
+
+    def render_color(self, record):
+        return record.get_color_display() if record.color else "—"
 
     def render_stock_qty(self, record):
         if not record.track_stock:

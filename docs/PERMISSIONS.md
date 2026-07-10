@@ -25,6 +25,9 @@ only their own records but a manager the whole store. See
 | `Payment` | `created_by`, `invoice.salesperson` | `sales.view_all_payment` |
 | `Delivery` | `assigned_to`, `created_by` | `sales.view_all_delivery` |
 | `finance.CashDeposit` | `created_by` | `finance.view_all_cashdeposit` |
+| `finance.Expense` | `paid_by`, `created_by` | `finance.view_all_expense` |
+| `finance.StaffAccount` | `user` | `finance.view_all_staffaccount` |
+| `finance.StaffLedgerEntry` | `account.user`, `created_by` | `finance.view_all_staffledgerentry` |
 
 Payment receipt printing (`/sales/payments/<id>/receipt/`) uses the same
 `sales.view_payment` permission and `Payment` ownership row filter as the
@@ -35,9 +38,9 @@ payments list.
 | Role | Who | Group | Visibility |
 |------|-----|-------|------------|
 | **Admin / Owner** | المسؤول | Django **superuser** | Everything |
-| **Sales Manager** | مدير المبيعات | **"Sales Manager"** | All reps' invoices/customers/payments/deliveries (holds every `view_all_*`), assigns salespeople & couriers, runs reports, manages catalog + rate, confirms deposits |
-| **Sales Representative** | مندوب المبيعات | **"Sales Representative"** | **Own** invoices/customers/payments only (no `view_all_*`) |
-| **Delivery Courier** | مندوب التوصيل | **"Delivery Courier"** | **Only deliveries assigned to them**; records cash collected. No access to invoices, reports, or sales-figure tiles |
+| **Sales Manager** | مدير المبيعات | **"Sales Manager"** | All reps' invoices/customers/payments/deliveries/expenses/staff accounts (holds every relevant `view_all_*`), assigns salespeople & couriers, runs reports, manages catalog + rate, confirms deposits, posts expenses, resolves staff ledger |
+| **Sales Representative** | مندوب المبيعات | **"Sales Representative"** | **Own** invoices/customers/payments only (no `view_all_*`); sees own staff account/ledger |
+| **Delivery Courier** | مندوب التوصيل | **"Delivery Courier"** | **Only deliveries assigned to them**; records cash collected and sees own staff account/ledger. No access to invoices, reports, or sales-figure tiles |
 
 An invoice's `salesperson` defaults to whoever creates it; only a Manager
 (`assign_salesperson`) can reassign it. Same for a delivery's `assigned_to`
@@ -69,6 +72,11 @@ permission sets in [`sales/management/commands/seed_roles.py`](../sales/manageme
 | `sales.assign_delivery` | Delivery | Assign deliveries to couriers |
 | `finance.confirm_cashdeposit` | CashDeposit | Confirm / reject deposits |
 | `finance.view_all_cashdeposit` | CashDeposit | See every staffer's deposits |
+| `finance.post_expense` | Expense | Post / void expenses |
+| `finance.view_all_expense` | Expense | See every staffer's expenses |
+| `finance.view_all_staffaccount` | StaffAccount | See every user's staff account |
+| `finance.resolve_staffledgerentry` | StaffLedgerEntry | Confirm/void/resolve staff ledger entries |
+| `finance.view_all_staffledgerentry` | StaffLedgerEntry | See every user's staff ledger entries |
 | `catalog.view_supplier` / `add_supplier` / `change_supplier` | Supplier | Manage the supplier list used by purchase invoices |
 | `catalog.view_purchaseinvoice` / `add_purchaseinvoice` / `change_purchaseinvoice` | PurchaseInvoice | View and post inbound stock invoices |
 | `catalog.apply_stocktake` | StockTake | Post the adjustments from a physical count |

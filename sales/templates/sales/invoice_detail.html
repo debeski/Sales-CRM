@@ -59,6 +59,12 @@
                                 <td>
                                     {{ item.description }}
                                     <span class="badge text-bg-light border ms-1">{{ item.kind_label }}</span>
+                                    {% if item.color or item.size %}
+                                    <div class="small text-muted">
+                                        {% if item.color %}{{ item.color_label }}{% endif %}
+                                        {% if item.size %}{% if item.color %} · {% endif %}{{ item.size }}{% endif %}
+                                    </div>
+                                    {% endif %}
                                 </td>
                                 <td class="text-end">{{ item.unit_price_lyd|floatformat:2 }}</td>
                                 <td class="text-end">{{ item.quantity|floatformat:"-2" }}</td>

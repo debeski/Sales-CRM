@@ -208,6 +208,8 @@ class WorkspaceDashboardView(LoginRequiredMixin, TemplateView):
             ),
             (("catalog.add_stocktake",), "ui_new_stock_take", "New Count", "bi bi-clipboard-check", "catalog:stock_take_create"),
             (("finance.add_exchangerate",), "page_exchange_rates", "Exchange Rates", "bi bi-currency-exchange", "finance:exchange_rate_list"),
+            (("finance.add_expense",), "page_expenses", "Expenses", "bi bi-receipt-cutoff", "finance:expense_list"),
+            (("finance.add_staffledgerentry",), "page_staff_ledger_entries", "Staff Ledger", "bi bi-person-lines-fill", "finance:staff_ledger_entry_list"),
             (("sales.view_sales_report",), "ui_sales_report", "Sales Report", "bi bi-graph-up", "sales:report"),
             (("sales.view_financial_report",), "page_financial_report", "Financial", "bi bi-cash-stack", "sales:financial_report"),
         ]
@@ -463,7 +465,7 @@ class WorkspaceDashboardView(LoginRequiredMixin, TemplateView):
         return tiles
 
     def _finance_tiles(self):
-        from finance.models import CashDeposit
+        from finance.models import CashDeposit, Expense, StaffAccount, StaffLedgerEntry
         from finance.services import (
             get_cbl_official_rate, get_current_rate, get_ean_black_market_rate,
             has_configured_rate,
@@ -511,6 +513,45 @@ class WorkspaceDashboardView(LoginRequiredMixin, TemplateView):
                 "bi bi-wallet2", value=_money(pending_total), unit="LYD",
                 meta=f"{pending.count()} {self._s('status_pending', 'Pending')}",
                 url=reverse("finance:cash_deposit_list"), tone="amber",
+            ))
+
+        if user.has_perm("finance.view_expense"):
+            today = timezone.localdate()
+            month_start = today.replace(day=1)
+            expenses = apply_ownership(scope_filtered_queryset(Expense.objects.all(), user), user)
+            posted_month = expenses.filter(
+                status=Expense.STATUS_POSTED,
+                expense_date__gte=month_start,
+            )
+            month_total = posted_month.aggregate(t=Sum("amount_lyd"))["t"] or Decimal("0.00")
+            tiles.append(_tile(
+                "expenses_month", self._s("ui_expenses_month", "Expenses This Month"),
+                "bi bi-receipt-cutoff", value=_money(month_total), unit="LYD",
+                meta=f"{posted_month.count()} {self._s('page_expenses', 'Expenses')}",
+                url=reverse("finance:expense_list"), tone="red",
+            ))
+
+        if user.has_perm("finance.view_staffaccount"):
+            accounts = apply_ownership(
+                scope_filtered_queryset(StaffAccount.objects.select_related("user"), user), user
+            )
+            account = accounts.filter(user=user).first()
+            if account:
+                url = reverse("finance:staff_account_detail", args=[account.pk])
+                value = _money(account.balance_lyd)
+                pending_count = account.pending_count
+                meta = f"{pending_count} {self._s('status_pending', 'Pending')}"
+            else:
+                url = reverse("finance:staff_account_list")
+                value = _count(accounts.count())
+                pending_count = apply_ownership(
+                    scope_filtered_queryset(StaffLedgerEntry.objects.all(), user), user
+                ).filter(status=StaffLedgerEntry.STATUS_PENDING_USER).count()
+                meta = f"{pending_count} {self._s('status_pending', 'Pending')}"
+            tiles.append(_tile(
+                "staff_account", self._s("page_staff_accounts", "Staff Accounts"),
+                "bi bi-person-vcard", value=value, unit="LYD" if account else "",
+                meta=meta, url=url, tone="violet",
             ))
         return tiles
 

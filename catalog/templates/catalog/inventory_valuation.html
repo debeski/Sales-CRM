@@ -12,29 +12,29 @@
 
     <div class="row g-3 mb-4">
         <div class="col-sm-4">
-            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="dlux-table-shell h-100 p-3">
                 <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_total_value|default:"Total Stock Value" }} (LYD)</div>
                 <div class="h4 mb-0">{{ total_lyd|floatformat:2 }}</div>
-            </div></div>
+            </div>
         </div>
         <div class="col-sm-4">
-            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="dlux-table-shell h-100 p-3">
                 <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_total_value|default:"Total Stock Value" }} (USD)</div>
                 <div class="h4 mb-0">{{ total_usd|floatformat:2 }}</div>
-            </div></div>
+            </div>
         </div>
         <div class="col-sm-4">
-            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="dlux-table-shell h-100 p-3">
                 <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_items_word|default:"Items" }}</div>
                 <div class="h4 mb-0">{{ item_count }}</div>
-            </div></div>
+            </div>
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm">
-        <div class="table-responsive">
-            <table class="table mb-0 align-middle">
-                <thead class="table-light">
+    <div class="dlux-table-shell">
+        <div class="dlux-table-scroll">
+            <table class="dlux-data-table table align-middle mb-0">
+                <thead class="dlux-table-head">
                     <tr>
                         <th>{{ DLUX_STRINGS.label_product_name|default:"Name" }}</th>
                         <th class="text-end">{{ DLUX_STRINGS.ui_system_qty|default:"Stock" }}</th>
@@ -43,7 +43,7 @@
                         <th class="text-end">{{ DLUX_STRINGS.ui_value_lyd|default:"Value (LYD)" }}</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="dlux-table-body">
                     {% for r in rows %}
                     <tr>
                         <td>{{ r.product.name }}</td>
@@ -57,7 +57,7 @@
                     {% endfor %}
                 </tbody>
                 {% if rows %}
-                <tfoot class="table-light fw-semibold">
+                <tfoot class="dlux-table-foot fw-semibold">
                     <tr>
                         <td>{{ DLUX_STRINGS.ui_total|default:"Total" }}</td>
                         <td></td><td></td>

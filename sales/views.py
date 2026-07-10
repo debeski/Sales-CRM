@@ -104,6 +104,8 @@ def _apply_item_price(item, invoice):
     if item.product_id:
         item.kind = item.KIND_PRODUCT
         item.service = None
+        item.color = item.color or item.product.color
+        item.size = item.size or item.product.size
         if item.unit_price_lyd in (None, ""):
             item.unit_price_lyd = item.product.selling_price_lyd(invoice.exchange_rate) or Decimal("0")
         item.unit_price_usd = item.product.effective_price_usd
@@ -111,12 +113,16 @@ def _apply_item_price(item, invoice):
     elif item.service_id:
         item.kind = item.KIND_SERVICE
         item.product = None
+        item.color = None
+        item.size = None
         item.unit_cost_usd = None  # services carry no goods cost
         if item.unit_price_lyd in (None, ""):
             item.unit_price_lyd = item.service.selling_price_lyd(invoice.exchange_rate) or Decimal("0")
         item.unit_price_usd = item.service.price_usd
     else:
         item.kind = item.KIND_CUSTOM
+        item.color = None
+        item.size = None
         if item.unit_price_lyd in (None, ""):
             item.unit_price_lyd = Decimal("0")
 
@@ -129,12 +135,16 @@ class _InvoiceEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
         """JSON {kind: {id: lyd_price}} so the editor can auto-fill unit prices."""
         from catalog.models import Product, Service
 
-        products = {
-            str(p.pk): float(p.selling_price_lyd(rate) or 0)
-            for p in Product.objects.filter(is_active=True)
-        }
+        products = {}
+        for p in Product.objects.filter(is_active=True):
+            products[str(p.pk)] = {
+                "price": float(p.selling_price_lyd(rate) or 0),
+                "color": p.color or "",
+                "color_label": p.get_color_display() if p.color else "",
+                "size": p.size or "",
+            }
         services = {
-            str(s.pk): float(s.selling_price_lyd(rate) or 0)
+            str(s.pk): {"price": float(s.selling_price_lyd(rate) or 0)}
             for s in Service.objects.filter(is_active=True)
         }
         return json.dumps({"product": products, "service": services})

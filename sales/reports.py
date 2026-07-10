@@ -232,7 +232,8 @@ def build_financial_report(date_from, date_to):
     Deliberately NOT ``apply_ownership``-scoped — this is an owner/manager P&L
     over the entire business, gated by ``sales.view_financial_report``.
 
-    Period figures: revenue, COGS (estimate), gross profit, cash collected.
+    Period figures: revenue, COGS, gross profit, posted operating expenses,
+    net profit, and cash collected.
     Snapshot (current) figures: outstanding receivables, inventory value — these
     are point-in-time, labelled as such in the template.
 
@@ -242,6 +243,7 @@ def build_financial_report(date_from, date_to):
     current cost via ``Coalesce``.
     """
     from catalog.models import Product
+    from finance.models import Expense
 
     live = Invoice.objects.filter(status__in=LIVE_STATUSES, invoice_date__range=(date_from, date_to))
     agg = live.aggregate(revenue=Sum("total_lyd"), count=Count("id"))
@@ -261,6 +263,13 @@ def build_financial_report(date_from, date_to):
     ) or _Z
     gross_profit = revenue - cogs
     margin = (gross_profit / revenue * Decimal("100")) if revenue else _Z
+    operating_expenses = (
+        Expense.objects.filter(
+            status=Expense.STATUS_POSTED,
+            expense_date__range=(date_from, date_to),
+        ).aggregate(s=Sum("amount_lyd"))["s"]
+    ) or _Z
+    net_profit = gross_profit - operating_expenses
 
     # Cash actually collected in the period.
     cash_collected = (
@@ -296,6 +305,8 @@ def build_financial_report(date_from, date_to):
         "cogs": cogs,
         "gross_profit": gross_profit,
         "margin_percent": margin,
+        "operating_expenses": operating_expenses,
+        "net_profit": net_profit,
         "cash_collected": cash_collected,
         "receivables": receivables,
         "inventory_value": inventory_value,

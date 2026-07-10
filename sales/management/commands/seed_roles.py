@@ -39,6 +39,9 @@ REP_PERMS = [
     # Hand over the cash they collected (an admin/manager confirms it)
     "finance.view_cashdeposit",
     "finance.add_cashdeposit",
+    # Own staff account: advances, loans, commissions, service payouts
+    "finance.view_staffaccount",
+    "finance.view_staffledgerentry",
 ]
 
 # Only the deliveries assigned to them (no view_all_delivery). Never sees sales.
@@ -47,6 +50,8 @@ COURIER_PERMS = [
     "sales.change_delivery",     # update status of their own jobs
     "finance.view_cashdeposit",
     "finance.add_cashdeposit",
+    "finance.view_staffaccount",
+    "finance.view_staffledgerentry",
 ]
 
 # Sees and assigns everyone's work; the view_all_* grants lift row-scoping.
@@ -82,6 +87,16 @@ MANAGER_PERMS = [
     "finance.view_exchangerate", "finance.add_exchangerate", "finance.change_exchangerate",
     "finance.view_cashdeposit", "finance.add_cashdeposit", "finance.change_cashdeposit",
     "finance.confirm_cashdeposit", "finance.view_all_cashdeposit",
+    "finance.view_expensecategory", "finance.add_expensecategory",
+    "finance.change_expensecategory", "finance.delete_expensecategory",
+    "finance.view_expense", "finance.add_expense", "finance.change_expense",
+    "finance.delete_expense", "finance.post_expense", "finance.view_all_expense",
+    "finance.view_staffaccount", "finance.add_staffaccount",
+    "finance.change_staffaccount", "finance.delete_staffaccount",
+    "finance.view_all_staffaccount",
+    "finance.view_staffledgerentry", "finance.add_staffledgerentry",
+    "finance.change_staffledgerentry", "finance.delete_staffledgerentry",
+    "finance.resolve_staffledgerentry", "finance.view_all_staffledgerentry",
 ]
 
 GROUPS = {

@@ -29,37 +29,37 @@
     <div class="row g-3 mb-4">
         {% if can_view_sales %}
         <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="dlux-table-shell h-100 p-3">
                 <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_sales_today }}{% if not is_sales_manager %} <i class="bi bi-person-badge text-muted" title="{{ DLUX_STRINGS.label_invoice_salesperson }}"></i>{% endif %}</div>
                 <div class="h4 mb-0">{{ sales_today|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
                 <div class="small text-muted">{{ count_today }} {{ DLUX_STRINGS.ui_invoices_word }}</div>
-            </div></div>
+            </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="dlux-table-shell h-100 p-3">
                 <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_sales_month }}</div>
                 <div class="h4 mb-0">{{ sales_month|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
-            </div></div>
+            </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="dlux-table-shell h-100 p-3">
                 <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_outstanding }}</div>
                 <div class="h4 mb-0 text-danger">{{ outstanding|floatformat:2 }} <span class="fs-6 text-muted">LYD</span></div>
                 <div class="small text-muted">{{ draft_count }} {{ DLUX_STRINGS.ui_drafts }}</div>
-            </div></div>
+            </div>
         </div>
         {% endif %}
         {% if can_view_deliveries %}
         <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="dlux-table-shell h-100 p-3">
                 <div class="text-muted small text-uppercase"><i class="bi bi-truck me-1"></i>{{ DLUX_STRINGS.page_deliveries }}</div>
                 <div class="h4 mb-0">{{ open_delivery_count }}</div>
                 <div class="small text-muted"><a href="{% url 'sales:delivery_list' %}" class="text-decoration-none">{{ DLUX_STRINGS.ui_view_all }}</a></div>
-            </div></div>
+            </div>
         </div>
         {% endif %}
         <div class="col-sm-6 col-xl-3">
-            <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="dlux-table-shell h-100 p-3">
                 <div class="text-muted small text-uppercase">{{ DLUX_STRINGS.ui_exchange_rate }} <span class="text-muted">(LYD/USD)</span></div>
                 <div class="d-flex justify-content-between align-items-baseline mt-1">
                     <span class="small text-muted">{{ DLUX_STRINGS.ui_custom_rate }}</span>
@@ -88,27 +88,27 @@
                     {% if cbl_official %}CBL{% if cbl_official.date %} {{ cbl_official.date }}{% endif %}{% endif %}{% if ean_market %} · EANLibya{% endif %}{% if rate_gap != None %} · {{ DLUX_STRINGS.ui_rate_gap }}: {{ rate_gap|floatformat:2 }}{% endif %}
                     {% if not cbl_official and not ean_market %}{% if latest_rate_row %}{{ latest_rate_row.created_at|date:"Y-m-d" }}{% else %}—{% endif %}{% endif %}
                 </div>
-            </div></div>
+            </div>
         </div>
     </div>
 
     <div class="row g-4">
         {% if can_view_deliveries %}
         <div class="col-lg-5 order-lg-2">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
+            <div class="dlux-table-shell h-100">
+                <div class="d-flex justify-content-between align-items-center px-3 py-2 fw-semibold border-bottom">
                     <span><i class="bi bi-truck me-1"></i>{{ DLUX_STRINGS.page_deliveries }}</span>
                     <a href="{% url 'sales:delivery_list' %}" class="small text-decoration-none">{{ DLUX_STRINGS.ui_view_all }}</a>
                 </div>
                 <ul class="list-group list-group-flush">
                     {% for d in open_deliveries %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
                         <span>{{ d.recipient|default:d.address }}</span>
                         <span class="badge rounded-pill
                             {% if d.status == 'delivered' %}bg-success{% elif d.status == 'out' %}bg-warning text-dark{% elif d.status == 'assigned' %}bg-info text-dark{% elif d.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">{{ d.status_label }}</span>
                     </li>
                     {% empty %}
-                    <li class="list-group-item text-muted text-center py-4">{{ DLUX_STRINGS.ui_no_deliveries }}</li>
+                    <li class="list-group-item bg-transparent text-muted text-center py-4">{{ DLUX_STRINGS.ui_no_deliveries }}</li>
                     {% endfor %}
                 </ul>
             </div>
@@ -116,15 +116,15 @@
         {% endif %}
         {% if can_view_sales %}
         <div class="col-lg-7">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
-                    <span>{{ DLUX_STRINGS.ui_recent_invoices }}</span>
-                    <a href="{% url 'sales:invoice_list' %}" class="small text-decoration-none">{{ DLUX_STRINGS.ui_view_all }}</a>
-                </div>
-                <div class="table-responsive">
-                    <table class="table mb-0 align-middle">
-                        <thead class="table-light"><tr><th>{{ DLUX_STRINGS.label_number }}</th><th>{{ DLUX_STRINGS.ui_customer }}</th><th>{{ DLUX_STRINGS.label_status }}</th><th class="text-end">{{ DLUX_STRINGS.ui_total }}</th></tr></thead>
-                        <tbody>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="h6 fw-semibold mb-0">{{ DLUX_STRINGS.ui_recent_invoices }}</h2>
+                <a href="{% url 'sales:invoice_list' %}" class="small text-decoration-none">{{ DLUX_STRINGS.ui_view_all }}</a>
+            </div>
+            <div class="dlux-table-shell">
+                <div class="dlux-table-scroll">
+                    <table class="dlux-data-table table align-middle mb-0">
+                        <thead class="dlux-table-head"><tr><th>{{ DLUX_STRINGS.label_number }}</th><th>{{ DLUX_STRINGS.ui_customer }}</th><th>{{ DLUX_STRINGS.label_status }}</th><th class="text-end">{{ DLUX_STRINGS.ui_total }}</th></tr></thead>
+                        <tbody class="dlux-table-body">
                             {% for inv in recent_invoices %}
                             <tr>
                                 <td><a href="{% url 'sales:invoice_detail' inv.pk %}" class="text-decoration-none">{{ inv.number }}</a></td>
@@ -144,23 +144,23 @@
         {% endif %}
         {% if perms.catalog.view_product %}
         <div class="col-lg-5">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-transparent fw-semibold d-flex justify-content-between">
+            <div class="dlux-table-shell h-100">
+                <div class="d-flex justify-content-between align-items-center px-3 py-2 fw-semibold border-bottom">
                     <span><i class="bi bi-exclamation-triangle text-warning me-1"></i>{{ DLUX_STRINGS.ui_low_stock }}</span>
                     <span class="badge bg-warning text-dark rounded-pill">{{ low_stock_count }}</span>
                 </div>
                 <ul class="list-group list-group-flush">
                     {% for p in low_stock %}
-                    <li class="list-group-item d-flex justify-content-between">
+                    <li class="list-group-item bg-transparent d-flex justify-content-between">
                         <span>{{ p.name }}</span>
                         <span class="text-danger fw-semibold">{{ p.stock_qty|floatformat:"-2" }}</span>
                     </li>
                     {% empty %}
-                    <li class="list-group-item text-muted text-center py-4">{{ DLUX_STRINGS.ui_stock_healthy }}</li>
+                    <li class="list-group-item bg-transparent text-muted text-center py-4">{{ DLUX_STRINGS.ui_stock_healthy }}</li>
                     {% endfor %}
                 </ul>
                 {% if pending_deposits %}
-                <div class="card-body border-top">
+                <div class="px-3 py-2 border-top">
                     <a href="{% url 'finance:cash_deposit_list' %}" class="text-decoration-none">
                         <i class="bi bi-cash-stack me-1"></i>{{ pending_deposits }} {{ DLUX_STRINGS.ui_deposits_pending }}
                     </a>

@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django import forms
 from django.forms import formset_factory
+from django.utils.html import format_html, format_html_join
 
 from dlux.forms import _build_archive_file_widget
 from dlux.translations import get_strings
@@ -11,6 +12,86 @@ from common.forms import build_grid_helper, translate_choice_fields, translate_h
 from finance.services import get_current_rate
 
 from .models import Category, Product, PurchaseInvoice, Service, StockMovement, Supplier
+
+
+COLOR_SWATCHES = {
+    Product.COLOR_BLACK: "#111111",
+    Product.COLOR_GRAY: "#808080",
+    Product.COLOR_WHITE: "#ffffff",
+    Product.COLOR_RED: "#dc3545",
+    Product.COLOR_BLUE: "#0d6efd",
+    Product.COLOR_GREEN: "#198754",
+    Product.COLOR_YELLOW: "#ffc107",
+    Product.COLOR_ORANGE: "#fd7e14",
+    Product.COLOR_PURPLE: "#6f42c1",
+    Product.COLOR_PINK: "#d63384",
+    Product.COLOR_BROWN: "#795548",
+    Product.COLOR_BEIGE: "#d8c3a5",
+    Product.COLOR_NAVY: "#001f54",
+    Product.COLOR_GOLD: "#d4af37",
+    Product.COLOR_TEAL: "#20c997",
+}
+
+
+class ColorPaletteWidget(forms.Widget):
+    input_type = "hidden"
+
+    def __init__(self, attrs=None, choices=()):
+        super().__init__(attrs)
+        self.choices = list(choices) or list(Product.COLOR_CHOICES)
+
+    def render(self, name, value, attrs=None, renderer=None):
+        from common.i18n import t
+
+        value = value or ""
+        attrs = self.build_attrs(self.attrs, attrs)
+        input_attrs = dict(attrs)
+        if "id" not in input_attrs:
+            input_attrs["id"] = f"id_{name}"
+        hidden = forms.HiddenInput().render(name, value, input_attrs, renderer=renderer)
+        options = []
+        for option_value, fallback_label in self.choices:
+            label = t(f"color_{option_value}", fallback_label)
+            bg = COLOR_SWATCHES.get(option_value, "#ffffff")
+            border = "#111111" if option_value == Product.COLOR_WHITE else bg
+            options.append((option_value, label, bg, border))
+        buttons = format_html_join(
+            "",
+            '<button type="button" class="color-swatch" data-color-value="{}" data-color-label="{}" '
+            'title="{}" aria-label="{}" '
+            'style="width:1.45rem;height:1.45rem;margin:0 .18rem .18rem 0;border:2px solid {};'
+            'border-radius:999px;background:{};box-shadow:inset 0 0 0 1px rgba(255,255,255,.45);"></button>',
+            ((option_value, label, label, label, border, bg) for option_value, label, bg, border in options),
+        )
+        current_label = t("ui_no_color", "No color")
+        current_bg = "transparent"
+        current_border = "var(--bs-border-color,#adb5bd)"
+        for option_value, label, bg, border in options:
+            if option_value == value:
+                current_label = label
+                current_bg = bg
+                current_border = border
+                break
+        return format_html(
+            '<div class="color-palette-widget position-relative" data-color-palette data-empty-label="{}">{}'
+            '<button type="button" class="btn btn-sm btn-outline-secondary w-100 d-flex align-items-center justify-content-between gap-2" data-color-trigger>'
+            '<span class="d-inline-flex align-items-center gap-2">'
+            '<span data-color-current-swatch style="display:inline-block;width:1rem;height:1rem;border-radius:999px;border:2px solid {};background:{}"></span>'
+            '<span data-color-current-label>{}</span>'
+            '</span><i class="bi bi-chevron-down"></i></button>'
+            '<div class="color-palette-popover shadow border rounded bg-body p-2" data-color-popover hidden '
+            'style="position:absolute;z-index:1080;min-width:12rem;max-width:14rem;inset-inline-start:0;top:calc(100% + .25rem)">{}'
+            '<button type="button" class="btn btn-sm btn-link px-1 py-0" data-color-value="" data-color-label="{}">{}</button>'
+            '</div></div>',
+            t("ui_no_color", "No color"),
+            hidden,
+            current_border,
+            current_bg,
+            current_label,
+            buttons,
+            t("ui_clear_color", "Clear color"),
+            t("ui_clear_color", "Clear color"),
+        )
 
 
 def _use_dlux_image_widget(form, field_name="image"):
@@ -87,7 +168,8 @@ class ProductForm(forms.ModelForm):
         # stock_qty is intentionally excluded: stock is driven by StockMovement so
         # the ledger stays authoritative. Use a "Stock In" movement to seed quantity.
         fields = [
-            "name", "sku", "category", "barcode", "image", "unit", "description",
+            "name", "sku", "category", "barcode", "image", "unit",
+            "description",
             "cost_usd", "markup_percent", "price_usd", "price_lyd_override",
             "track_stock", "reorder_level", "is_active",
         ]
@@ -208,6 +290,8 @@ class OpeningStockLineForm(forms.Form):
     category = forms.ModelChoiceField(queryset=Category.objects.all(), required=False)
     unit = forms.ChoiceField(choices=Product.UNIT_CHOICES, initial=Product.UNIT_PIECE)
     barcode = forms.CharField(required=False, max_length=64)
+    color = forms.ChoiceField(required=False, choices=[("", "---------"), *Product.COLOR_CHOICES], widget=ColorPaletteWidget(choices=Product.COLOR_CHOICES))
+    size = forms.CharField(required=False, max_length=120)
     cost_usd = forms.DecimalField(required=False, min_value=0, max_digits=12, decimal_places=2, initial=Decimal("0"))
     markup_percent = forms.DecimalField(required=False, min_value=0, max_digits=6, decimal_places=2, initial=Decimal("0"))
     price_usd = forms.DecimalField(required=False, min_value=0, max_digits=12, decimal_places=2, initial=Decimal("0"))
@@ -224,6 +308,8 @@ class OpeningStockLineForm(forms.Form):
             "category": s.get("label_product_category", "Category"),
             "unit": s.get("label_product_unit", "Unit"),
             "barcode": s.get("label_product_barcode", "Barcode"),
+            "color": s.get("label_product_color", "Color"),
+            "size": s.get("label_product_size", "Size / Spec"),
             "cost_usd": s.get("label_product_cost_usd", "Import Cost (USD)"),
             "markup_percent": s.get("label_product_markup_percent", "Markup %"),
             "price_usd": s.get("label_product_price_usd", "Selling Price (USD)"),
@@ -274,7 +360,8 @@ class PurchaseInvoiceLineForm(OpeningStockLineForm):
             cleaned.get(name)
             for name in (
                 "product", "name", "category", "barcode", "cost_usd", "markup_percent",
-                "price_usd", "price_lyd_override", "quantity",
+                "color", "size", "price_usd",
+                "price_lyd_override", "quantity",
             )
         )
         if not has_data:
@@ -290,4 +377,4 @@ class PurchaseInvoiceLineForm(OpeningStockLineForm):
 # invoice item grid). Fully-empty rows are ignored; blank-name rows are dropped
 # in the view.
 OpeningStockLineFormSet = formset_factory(OpeningStockLineForm, extra=1, can_delete=True)
-PurchaseInvoiceLineFormSet = formset_factory(PurchaseInvoiceLineForm, extra=1, can_delete=True)
+PurchaseInvoiceLineFormSet = formset_factory(PurchaseInvoiceLineForm, extra=0, can_delete=True)

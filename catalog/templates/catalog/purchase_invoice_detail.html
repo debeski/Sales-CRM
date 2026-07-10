@@ -44,6 +44,12 @@
                                 <td>
                                     {{ line.description }}
                                     {% if line.barcode %}<div class="small text-muted">{{ line.barcode }}</div>{% endif %}
+                                    {% if line.color or line.size %}
+                                    <div class="small text-muted">
+                                        {% if line.color %}{{ line.color_label }}{% endif %}
+                                        {% if line.size %}{% if line.color %} · {% endif %}{{ line.size }}{% endif %}
+                                    </div>
+                                    {% endif %}
                                 </td>
                                 <td>{{ line.unit_label }}</td>
                                 <td class="text-end">{{ line.cost_usd|floatformat:2 }}</td>

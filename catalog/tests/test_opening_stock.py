@@ -56,6 +56,7 @@ class OpeningStockViewTests(TestCase):
     def _row(self, **over):
         base = {
             "product": "", "name": "", "unit": "piece", "barcode": "",
+            "color": "", "size": "",
             "cost_usd": "0.00", "markup_percent": "0.00", "price_usd": "0.00",
             "price_lyd_override": "", "quantity": "0.00",
         }
@@ -117,6 +118,8 @@ class OpeningStockViewTests(TestCase):
             category=cat,
             unit=Product.UNIT_BOX,
             barcode="6290000000012",
+            color=Product.COLOR_BLACK,
+            size="Small / 12x8x3 cm",
             cost_usd=Decimal("42.00"),
             markup_percent=Decimal("30.00"),
             price_usd=Decimal("54.60"),
@@ -137,4 +140,6 @@ class OpeningStockViewTests(TestCase):
         self.assertEqual(row["barcode"], "6290000000012")
         self.assertEqual(row["category"], str(cat.pk))
         self.assertEqual(row["unit"], Product.UNIT_BOX)
+        self.assertEqual(row["color"], Product.COLOR_BLACK)
+        self.assertEqual(row["size"], "Small / 12x8x3 cm")
         self.assertIn("dataset.userEdited", html)

@@ -25,6 +25,7 @@
         thead th { background: #f9fafb; text-align: left; padding: 10px; border-bottom: 2px solid var(--line); }
         th.num, td.num { text-align: right; }
         tbody td { padding: 10px; border-bottom: 1px solid var(--line); }
+        .muted { color: var(--muted); font-size: 11px; margin-top: 2px; }
         .totals { margin-top: 18px; margin-left: auto; width: 280px; font-size: 14px; }
         .totals .row { display: flex; justify-content: space-between; padding: 6px 0; }
         .totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: 17px; margin-top: 6px; padding-top: 10px; }
@@ -90,7 +91,15 @@
                 {% for line in lines %}
                 <tr>
                     <td>{{ forloop.counter }}</td>
-                    <td>{{ line.description }}</td>
+                    <td>
+                        {{ line.description }}
+                        {% if line.color or line.size %}
+                        <div class="muted">
+                            {% if line.color %}{{ line.color_label }}{% endif %}
+                            {% if line.size %}{% if line.color %} · {% endif %}{{ line.size }}{% endif %}
+                        </div>
+                        {% endif %}
+                    </td>
                     <td>{{ line.unit_label }}</td>
                     <td class="num">{{ line.cost_usd|floatformat:2 }}</td>
                     <td class="num">{{ line.quantity|floatformat:"-2" }}</td>

@@ -47,6 +47,8 @@ class PurchaseInvoiceTests(TestCase):
             "markup_percent": "0.00",
             "price_usd": "0.00",
             "price_lyd_override": "",
+            "color": "",
+            "size": "",
             "quantity": "0.00",
         }
         base.update(over)
@@ -93,6 +95,8 @@ class PurchaseInvoiceTests(TestCase):
                 cost_usd="40.00",
                 markup_percent="25.00",
                 price_usd="50.00",
+                color=Product.COLOR_BLUE,
+                size="120x80x30 mm",
                 quantity="5",
             )
         ])
@@ -111,10 +115,14 @@ class PurchaseInvoiceTests(TestCase):
         self.assertEqual(product.stock_qty, Decimal("5.00"))
         self.assertEqual(product.cost_usd, Decimal("40.00"))
         self.assertEqual(product.price_usd, Decimal("50.00"))
+        self.assertEqual(product.color, Product.COLOR_BLUE)
+        self.assertEqual(product.size, "120x80x30 mm")
 
         line = invoice.lines.get()
         self.assertEqual(line.product_id, product.pk)
         self.assertEqual(line.quantity, Decimal("5.00"))
+        self.assertEqual(line.color, Product.COLOR_BLUE)
+        self.assertEqual(line.size, "120x80x30 mm")
         movement = StockMovement.objects.get(product=product)
         self.assertEqual(movement.reference, invoice.number)
         self.assertEqual(movement.purchase_invoice_id, invoice.pk)
@@ -168,6 +176,8 @@ class PurchaseInvoiceTests(TestCase):
             markup_percent=Decimal("30.00"),
             price_usd=Decimal("54.60"),
             price_lyd_override=Decimal("410.00"),
+            color=Product.COLOR_GOLD,
+            size="Large / 30x20x10 cm",
         )
 
         resp = self._get_create()
@@ -184,6 +194,15 @@ class PurchaseInvoiceTests(TestCase):
         self.assertEqual(row["price_lyd"], 410.0)
         self.assertEqual(row["barcode"], "6290000000012")
         self.assertEqual(row["unit"], Product.UNIT_BOX)
+        self.assertEqual(row["color"], Product.COLOR_GOLD)
+        self.assertEqual(row["size"], "Large / 30x20x10 cm")
+
+    def test_purchase_invoice_create_starts_with_one_empty_row(self):
+        resp = self._get_create()
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+
+        self.assertIn('name="form-TOTAL_FORMS" value="1"', html)
 
     def test_purchase_invoice_context_menu_prints_in_new_tab(self):
         from catalog.tables import PurchaseInvoiceTable

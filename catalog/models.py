@@ -46,7 +46,7 @@ def _image_detail_row(instance, label):
 
 class Category(ScopedModel):
     """Grouping for products (e.g. Smart Locks, Spare Parts, Accessories)."""
-
+    is_section = True
     name = models.CharField(max_length=120, verbose_name="Name")
     description = models.TextField(blank=True, verbose_name="Description")
     is_active = models.BooleanField(default=True, verbose_name="Active")
@@ -82,6 +82,39 @@ class Supplier(ScopedModel):
 class Product(ScopedModel):
     """A stock item. Priced in USD; sold in LYD via the live rate."""
 
+    COLOR_BLACK = "black"
+    COLOR_GRAY = "gray"
+    COLOR_WHITE = "white"
+    COLOR_RED = "red"
+    COLOR_BLUE = "blue"
+    COLOR_GREEN = "green"
+    COLOR_YELLOW = "yellow"
+    COLOR_ORANGE = "orange"
+    COLOR_PURPLE = "purple"
+    COLOR_PINK = "pink"
+    COLOR_BROWN = "brown"
+    COLOR_BEIGE = "beige"
+    COLOR_NAVY = "navy"
+    COLOR_GOLD = "gold"
+    COLOR_TEAL = "teal"
+    COLOR_CHOICES = (
+        (COLOR_BLACK, "Black"),
+        (COLOR_GRAY, "Gray"),
+        (COLOR_WHITE, "White"),
+        (COLOR_RED, "Red"),
+        (COLOR_BLUE, "Blue"),
+        (COLOR_GREEN, "Green"),
+        (COLOR_YELLOW, "Yellow"),
+        (COLOR_ORANGE, "Orange"),
+        (COLOR_PURPLE, "Purple"),
+        (COLOR_PINK, "Pink"),
+        (COLOR_BROWN, "Brown"),
+        (COLOR_BEIGE, "Beige"),
+        (COLOR_NAVY, "Navy"),
+        (COLOR_GOLD, "Gold"),
+        (COLOR_TEAL, "Teal"),
+    )
+
     UNIT_PIECE = "piece"
     UNIT_BOX = "box"
     UNIT_SET = "set"
@@ -107,6 +140,10 @@ class Product(ScopedModel):
     barcode = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="Barcode")
     image = models.ImageField(upload_to="catalog/products/", blank=True, verbose_name="Image")
     unit = models.CharField(max_length=12, choices=UNIT_CHOICES, default=UNIT_PIECE, verbose_name="Unit")
+    color = models.CharField(
+        max_length=16, choices=COLOR_CHOICES, null=True, blank=True, verbose_name="Color",
+    )
+    size = models.CharField(max_length=120, null=True, blank=True, verbose_name="Size / Spec")
 
     # --- Pricing (USD base) ---
     cost_usd = models.DecimalField(
@@ -170,6 +207,13 @@ class Product(ScopedModel):
         from common.i18n import t
         return t(f"unit_{self.unit}", dict(self.UNIT_CHOICES).get(self.unit, self.unit))
 
+    def get_color_display(self):
+        """Translated color label for dlux detail/list rendering."""
+        from common.i18n import t
+        if not self.color:
+            return ""
+        return t(f"color_{self.color}", dict(self.COLOR_CHOICES).get(self.color, self.color))
+
     @property
     def effective_price_usd(self):
         """USD selling price: explicit ``price_usd`` if set, else cost + markup."""
@@ -196,6 +240,16 @@ class Product(ScopedModel):
                 "value": f"{price:,.2f}" if price is not None else "—",
             }
         ]
+        if self.color:
+            rows.append({
+                "label": t("label_product_color", "Color"),
+                "value": self.get_color_display(),
+            })
+        if self.size:
+            rows.append({
+                "label": t("label_product_size", "Size"),
+                "value": self.size,
+            })
         image_row = _image_detail_row(self, t("label_product_image", "Image"))
         if image_row:
             rows.insert(0, image_row)
@@ -375,6 +429,10 @@ class PurchaseInvoiceLine(models.Model):
     description = models.CharField(max_length=200, verbose_name="Description")
     unit = models.CharField(max_length=12, choices=Product.UNIT_CHOICES, default=Product.UNIT_PIECE, verbose_name="Unit")
     barcode = models.CharField(max_length=64, blank=True, verbose_name="Barcode")
+    color = models.CharField(
+        max_length=16, choices=Product.COLOR_CHOICES, null=True, blank=True, verbose_name="Color",
+    )
+    size = models.CharField(max_length=120, null=True, blank=True, verbose_name="Size / Spec")
     cost_usd = models.DecimalField(
         max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0.00"))],
         verbose_name="Import Cost (USD)",
@@ -419,6 +477,13 @@ class PurchaseInvoiceLine(models.Model):
     def unit_label(self):
         from common.i18n import t
         return t(f"unit_{self.unit}", dict(Product.UNIT_CHOICES).get(self.unit, self.unit))
+
+    @property
+    def color_label(self):
+        from common.i18n import t
+        if not self.color:
+            return ""
+        return t(f"color_{self.color}", dict(Product.COLOR_CHOICES).get(self.color, self.color))
 
 
 class StockMovement(ScopedModel):

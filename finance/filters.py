@@ -1,7 +1,7 @@
 import django_filters
 from django.db.models import Q
 
-from .models import CashDeposit, ExchangeRate
+from .models import CashDeposit, ExchangeRate, Expense, ExpenseCategory, StaffAccount, StaffLedgerEntry
 
 
 class ExchangeRateFilter(django_filters.FilterSet):
@@ -43,3 +43,94 @@ class CashDepositFilter(django_filters.FilterSet):
         if not value:
             return queryset
         return queryset.filter(Q(reference__icontains=value) | Q(notes__icontains=value))
+
+
+class ExpenseCategoryFilter(django_filters.FilterSet):
+    keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [{"name": "keyword", "placeholder_key": "search_placeholder"}],
+        "advanced_fields": [["is_active"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
+    class Meta:
+        model = ExpenseCategory
+        fields = ["keyword", "is_active"]
+
+    def filter_keyword(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value))
+
+
+class ExpenseFilter(django_filters.FilterSet):
+    keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [{"name": "keyword", "placeholder_key": "search_placeholder"}, "category"],
+        "advanced_fields": [["method", "status"], ["paid_by"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
+    class Meta:
+        model = Expense
+        fields = ["keyword", "category", "method", "status", "paid_by"]
+
+    def filter_keyword(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(reference__icontains=value)
+            | Q(notes__icontains=value)
+            | Q(category__name__icontains=value)
+        )
+
+
+class StaffAccountFilter(django_filters.FilterSet):
+    keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [{"name": "keyword", "placeholder_key": "search_placeholder"}],
+        "advanced_fields": [["is_active"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
+    class Meta:
+        model = StaffAccount
+        fields = ["keyword", "is_active"]
+
+    def filter_keyword(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(user__username__icontains=value)
+            | Q(user__first_name__icontains=value)
+            | Q(user__last_name__icontains=value)
+            | Q(notes__icontains=value)
+        )
+
+
+class StaffLedgerEntryFilter(django_filters.FilterSet):
+    keyword = django_filters.CharFilter(method="filter_keyword", label="")
+
+    advanced_config = {
+        "fields": [{"name": "keyword", "placeholder_key": "search_placeholder"}, "account"],
+        "advanced_fields": [["entry_type", "status"]],
+        "clear_preserve_keys": ["sort", "page"],
+    }
+
+    class Meta:
+        model = StaffLedgerEntry
+        fields = ["keyword", "account", "entry_type", "status"]
+
+    def filter_keyword(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            Q(reference__icontains=value)
+            | Q(notes__icontains=value)
+            | Q(account__user__username__icontains=value)
+            | Q(account__user__first_name__icontains=value)
+            | Q(account__user__last_name__icontains=value)
+        )

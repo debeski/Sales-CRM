@@ -1,12 +1,18 @@
 from unittest import mock
+from decimal import Decimal
 
 from django import forms
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase
 
 from common.forms import translate_choice_fields
 
 from ..urls import app_name
 from .. import services
+from ..models import StaffAccount, StaffLedgerEntry
+from ..translations import DLUX_STRINGS as FINANCE_STRINGS
+
+User = get_user_model()
 
 
 class ChoiceTranslationTests(SimpleTestCase):
@@ -33,6 +39,67 @@ class ChoiceTranslationTests(SimpleTestCase):
 class FinanceConfigScaffoldTests(SimpleTestCase):
     def test_urls_namespace_matches_app_name(self):
         self.assertEqual(app_name, "finance")
+
+    def test_finance_translations_keep_english_arabic_key_parity(self):
+        self.assertEqual(set(FINANCE_STRINGS["en"]), set(FINANCE_STRINGS["ar"]))
+
+
+class StaffLedgerTests(TestCase):
+    def setUp(self):
+        from dlux.models import SystemSettings
+
+        settings = SystemSettings.load()
+        settings.is_configured = True
+        settings.save(update_fields=["is_configured"])
+        self.manager = User.objects.create_user("manager", password="x")
+        self.staff = User.objects.create_user("staff", password="x")
+        self.account = StaffAccount.for_user(self.staff)
+
+    def test_balance_counts_posted_signed_entries_only(self):
+        earned = StaffLedgerEntry.objects.create(
+            account=self.account,
+            entry_type=StaffLedgerEntry.TYPE_SERVICE_EARNED,
+            amount_lyd=Decimal("100.00"),
+            requires_user_confirmation=False,
+            created_by=self.manager,
+        )
+        advance = StaffLedgerEntry.objects.create(
+            account=self.account,
+            entry_type=StaffLedgerEntry.TYPE_ADVANCE,
+            amount_lyd=Decimal("40.00"),
+            created_by=self.manager,
+        )
+
+        earned.refresh_from_db()
+        advance.refresh_from_db()
+        self.assertEqual(earned.status, StaffLedgerEntry.STATUS_POSTED)
+        self.assertEqual(earned.signed_amount, Decimal("100.00"))
+        self.assertEqual(advance.status, StaffLedgerEntry.STATUS_PENDING_USER)
+        self.assertEqual(advance.signed_amount, Decimal("-40.00"))
+        self.assertEqual(self.account.balance_lyd, Decimal("100.00"))
+
+        advance.confirm(self.staff)
+        self.assertEqual(self.account.balance_lyd, Decimal("60.00"))
+
+    def test_pending_entry_notifies_the_staff_user(self):
+        from dlux.models import DluxNotificationState
+
+        entry = StaffLedgerEntry.objects.create(
+            account=self.account,
+            entry_type=StaffLedgerEntry.TYPE_LOAN,
+            amount_lyd=Decimal("25.00"),
+            created_by=self.manager,
+        )
+
+        entry.refresh_from_db()
+        self.assertIsNotNone(entry.notified_at)
+        self.assertTrue(
+            DluxNotificationState.objects.filter(
+                user=self.staff,
+                notification__source="finance",
+                notification__action="confirm_staff_entry",
+            ).exists()
+        )
 
 
 # A trimmed sample of the CBL currency table (USD row, as served) so the scraper

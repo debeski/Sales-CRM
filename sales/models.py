@@ -240,6 +240,8 @@ class InvoiceItem(models.Model):
         related_name="invoice_items", verbose_name="Service",
     )
     description = models.CharField(max_length=255, verbose_name="Description")
+    color = models.CharField(max_length=16, null=True, blank=True, verbose_name="Color")
+    size = models.CharField(max_length=120, null=True, blank=True, verbose_name="Size / Spec")
     unit_price_lyd = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Unit Price (LYD)")
     unit_price_usd = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, verbose_name="Unit Price (USD)")
     # Frozen unit *cost* (USD) at time of sale, for exact COGS in the financial
@@ -265,6 +267,18 @@ class InvoiceItem(models.Model):
     def kind_label(self):
         from common.i18n import t
         return t(f"kind_{self.kind}", self.get_kind_display())
+
+    @property
+    def color_label(self):
+        from common.i18n import t
+        if not self.color:
+            return ""
+        try:
+            from catalog.models import Product
+            fallback = dict(Product.COLOR_CHOICES).get(self.color, self.color)
+        except Exception:
+            fallback = self.color
+        return t(f"color_{self.color}", fallback)
 
     def clean(self):
         if self.kind == self.KIND_PRODUCT and not self.product_id:

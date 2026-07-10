@@ -91,7 +91,15 @@
                 {% for item in items %}
                 <tr>
                     <td>{{ forloop.counter }}</td>
-                    <td>{{ item.description }}<span class="kind">{{ item.kind_label }}</span></td>
+                    <td>
+                        {{ item.description }}<span class="kind">{{ item.kind_label }}</span>
+                        {% if item.color or item.size %}
+                        <div class="muted">
+                            {% if item.color %}{{ item.color_label }}{% endif %}
+                            {% if item.size %}{% if item.color %} · {% endif %}{{ item.size }}{% endif %}
+                        </div>
+                        {% endif %}
+                    </td>
                     <td class="num">{{ item.unit_price_lyd|floatformat:2 }}</td>
                     <td class="num">{{ item.quantity|floatformat:"-2" }}</td>
                     <td class="num">{{ item.line_total_lyd|floatformat:2 }}</td>

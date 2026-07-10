@@ -26,6 +26,9 @@ _workspace_dashboard.sidebar_permissions = [
     "finance.add_exchangerate",
     "finance.view_exchangerate",
     "finance.view_cashdeposit",
+    "finance.view_expense",
+    "finance.view_staffaccount",
+    "finance.view_staffledgerentry",
 ]
 
 urlpatterns = [

@@ -52,19 +52,20 @@ class ProductFilter(django_filters.FilterSet):
             {"name": "keyword", "placeholder_key": "search_placeholder"},
             "category",
         ],
-        "advanced_fields": [["unit", "is_active"]],
+        "advanced_fields": [["unit", "color"], ["is_active"]],
         "clear_preserve_keys": ["sort", "page"],
     }
 
     class Meta:
         model = Product
-        fields = ["keyword", "category", "unit", "is_active"]
+        fields = ["keyword", "category", "unit", "color", "is_active"]
 
     def filter_keyword(self, queryset, name, value):
         if not value:
             return queryset
         return queryset.filter(
             Q(name__icontains=value) | Q(sku__icontains=value) | Q(barcode__icontains=value)
+            | Q(size__icontains=value)
         )
 
 

@@ -47,6 +47,7 @@ class PricingAndInvoiceTests(TestCase):
         self.product = Product.objects.create(
             name="Lock X1", category=self.cat,
             cost_usd=Decimal("40"), markup_percent=Decimal("25"),
+            color=Product.COLOR_BLUE, size="Matte / 120x80 mm",
         )
         self.service = Service.objects.create(
             name="Install", service_type="installation", price_usd=Decimal("20"),
@@ -59,6 +60,31 @@ class PricingAndInvoiceTests(TestCase):
         # Manual LYD override wins over conversion
         self.product.price_lyd_override = Decimal("400.00")
         self.assertEqual(self.product.selling_price_lyd(), Decimal("400.00"))
+
+    def test_invoice_editor_product_map_includes_variant_metadata(self):
+        from sales.views import InvoiceCreateView
+
+        payload = json.loads(InvoiceCreateView()._price_map(Decimal("6.50")))
+        row = payload["product"][str(self.product.pk)]
+
+        self.assertEqual(row["price"], 325.0)
+        self.assertEqual(row["color"], Product.COLOR_BLUE)
+        self.assertEqual(row["color_label"], "Blue")
+        self.assertEqual(row["size"], "Matte / 120x80 mm")
+
+    def test_product_line_snapshots_variant_metadata(self):
+        from sales.views import _apply_item_price
+
+        inv = Invoice.objects.create(customer_name="Walk-in", exchange_rate=Decimal("6.50"))
+        item = InvoiceItem(
+            invoice=inv, product=self.product, description="",
+            unit_price_lyd=Decimal("325"), quantity=Decimal("1"),
+        )
+        _apply_item_price(item, inv)
+
+        self.assertEqual(item.kind, InvoiceItem.KIND_PRODUCT)
+        self.assertEqual(item.color, Product.COLOR_BLUE)
+        self.assertEqual(item.size, "Matte / 120x80 mm")
 
     def test_service_per_job_when_unpriced(self):
         svc = Service.objects.create(name="Custom job", service_type="other")

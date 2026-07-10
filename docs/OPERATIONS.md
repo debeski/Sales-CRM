@@ -86,25 +86,34 @@ language, theme). Health endpoint: `/health/`.
 2. **Finance → Exchange Rates → Add**: enter the current black-market USD→LYD rate.
    The Workspace dashboard warns until this is done.
 3. **Catalog → Categories / Products / Services**: add what you sell. For products,
-   enter `cost_usd` + `markup_percent` (or a direct `price_usd`).
+   enter `cost_usd` + `markup_percent` (or a direct `price_usd`). Product variants
+   (`color` and free-form `size` / spec) are descriptive only; set them during
+   Opening Stock or Purchase Invoice intake, then review them from product
+   list/detail screens.
    - **Bulk shortcut for first setup:** **Catalog → Stock Movements → Opening
      Stock (bulk)** loads everything already on the shelf in one grid — one row
      per item, each a new or existing product, with the quantity currently in
-     storage. Submit to create the items and post the opening stock in one go
-     (the result appears as Stock In movements). It can only be applied once;
+     storage. Rows can also set optional color and size/spec. Submit to create
+     the items and post the opening stock in one go (the result appears as Stock
+     In movements). It can only be applied once;
      afterward the button becomes a view-only Opening Stock record. See
      BUSINESS_RULES → *Opening stock*.
    - **Normal stock purchases after launch:** use **Catalog → Purchase Invoices**
      or **Catalog → Stock Movements → Add Stock**. This records supplier details,
-     creates/reuses products, accepts the supplier invoice scan/photo/PDF, and
-     posts Stock In movements per line.
+     creates/reuses products, can set product color and size/spec at intake,
+     accepts the supplier invoice scan/photo/PDF, and posts Stock In movements
+     per line.
 4. Create staff users and add them to one seeded role (`seed_roles` creates Sales
-   Manager, Sales Representative, and Delivery Courier).
+   Manager, Sales Representative, and Delivery Courier). For delivery people,
+   technicians, or anyone carrying advances/loans/service payouts, create a
+   **Finance → Staff Accounts** row so their ledger and confirmations have a home.
 5. **Sales → New Invoice**: type or pick a customer in the single search box —
    existing customers autofill phone/address, and a new name is saved as a
-   customer for next time. Add product / service lines (prices auto-fill), Save
-   Draft → **Issue** → record payments. **Print / Export** produces a clean
-   printable invoice (Save as PDF from the browser dialog).
+   customer for next time. Add product / service lines (prices auto-fill); product
+   lines also expose optional color and size/spec selectors when the selected
+   product has those values. Save Draft → **Issue** → record payments.
+   **Print / Export** produces a clean printable invoice (Save as PDF from the
+   browser dialog).
 
 ## Key URLs
 
@@ -121,7 +130,11 @@ language, theme). Health endpoint: `/health/`.
 | `/catalog/stock-movements/` | Stock ledger (+ Opening Stock / Add Stock buttons) |
 | `/finance/rates/` | Exchange rates |
 | `/finance/deposits/` | Cash deposits |
+| `/finance/expenses/` | Operating expenses |
+| `/finance/staff-accounts/` | Staff accounts / user credit |
+| `/finance/staff-ledger/` | Staff ledger entries |
 | `/sales/report/` | Sales report (XLSX export from here; owner-only) |
+| `/sales/financial/` | Fiscal-year financial report with expenses/net profit |
 
 ## Scheduled tasks (Celery Beat)
 
