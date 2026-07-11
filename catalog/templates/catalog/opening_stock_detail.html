@@ -31,7 +31,10 @@
                 <tbody>
                     {% for movement in movements %}
                     <tr>
-                        <td>{{ movement.product }}</td>
+                        <td>
+                            {{ movement.product }}
+                            {% if movement.variant_id %}<div class="small text-muted">{{ movement.variant.display_label }}</div>{% endif %}
+                        </td>
                         <td>{{ movement.reference }}</td>
                         <td class="text-end">{{ movement.quantity|floatformat:"-2" }}</td>
                         <td>{{ movement.created_at|date:"Y-m-d H:i" }}</td>

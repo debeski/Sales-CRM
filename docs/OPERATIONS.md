@@ -87,9 +87,10 @@ language, theme). Health endpoint: `/health/`.
    The Workspace dashboard warns until this is done.
 3. **Catalog → Categories / Products / Services**: add what you sell. For products,
    enter `cost_usd` + `markup_percent` (or a direct `price_usd`). Product variants
-   (`color` and free-form `size` / spec) are descriptive only; set them during
-   Opening Stock or Purchase Invoice intake, then review them from product
-   list/detail screens.
+   are stock-bearing `ProductVariant` buckets (`color` + free-form `size` / spec):
+   set them during Opening Stock, Purchase Invoice intake, or variant-aware manual
+   Stock Movements. Product list/detail screens show available color swatches with
+   quantities.
    - **Bulk shortcut for first setup:** **Catalog → Stock Movements → Opening
      Stock (bulk)** loads everything already on the shelf in one grid — one row
      per item, each a new or existing product, with the quantity currently in
@@ -110,8 +111,9 @@ language, theme). Health endpoint: `/health/`.
 5. **Sales → New Invoice**: type or pick a customer in the single search box —
    existing customers autofill phone/address, and a new name is saved as a
    customer for next time. Add product / service lines (prices auto-fill); product
-   lines also expose optional color and size/spec selectors when the selected
-   product has those values. Save Draft → **Issue** → record payments.
+   lines expose available color swatches and size/spec choices from live variant
+   stock. Save Draft → **Issue** draws down the selected variant bucket → record
+   payments.
    **Print / Export** produces a clean printable invoice (Save as PDF from the
    browser dialog).
 
@@ -225,6 +227,25 @@ python manage.py runserver      --settings=config.settings_dev_sqlite
 
 `config/settings_dev_sqlite.py` is **not for production** — it only overrides the
 database/cache so checks, migrations and smoke tests run on a laptop.
+
+## Rich demo dataset
+
+For local demos, screenshots, and business-logic smoke testing, run:
+
+```bash
+python manage.py seed_demo --settings=config.settings_dev_sqlite
+python manage.py seed_demo --reset --settings=config.settings_dev_sqlite  # rebuild demo rows
+```
+
+`seed_demo` now creates a cross-module operating dataset: five demo users
+(`demo_manager`, two sales reps, a courier, and a technician; password
+`demo12345`), five exchange-rate history rows, four suppliers, eight categories,
+24 products with barcode/color/size variant buckets and stock-ledger opening
+balances, 11 services, 12 customers, four posted purchase invoices with linked
+variant stock-in movements, 18 sales invoices across every status, linked cash/bank deposit
+batches, 10 deliveries, posted/draft/void expenses, staff-ledger rows, and both
+open and applied stock takes. Reference rows are idempotent; operational documents are
+created only when no invoices exist, unless `--reset` is used.
 
 ## Migrations
 

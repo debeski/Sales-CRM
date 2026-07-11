@@ -5,6 +5,11 @@ from .models import Customer, Invoice, InvoiceItem, Payment
 
 class InvoiceItemInline(admin.TabularInline):
     model = InvoiceItem
+    fields = (
+        "kind", "product", "variant", "service", "description",
+        "color", "size", "unit_price_lyd", "quantity", "line_total_lyd",
+    )
+    readonly_fields = ("line_total_lyd",)
     extra = 0
 
 

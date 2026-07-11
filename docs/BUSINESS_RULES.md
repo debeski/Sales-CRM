@@ -55,8 +55,9 @@ issued/partial/paid ──cancel──▶ cancelled  (stock restored)
 - **Draft**: editable; no stock impact.
 - **Issue** (`issue_invoice`): snapshots the rate record and **draws down stock**
   (a `StockMovement` OUT per product line). Requires at least one item. **Blocked**
-  if any tracked product would go negative — demand is summed per product across
-  lines and the issue is refused (nothing changes) with the shortages named.
+  if any tracked product or selected color/size variant would go negative —
+  demand is summed per product for legacy/no-variant lines and per `ProductVariant`
+  for variant lines; the issue is refused (nothing changes) with shortages named.
 - **Payments**: each `Payment` updates `amount_paid` and advances status
   (`issued → partial → paid`). Payments link optionally to a `CashDeposit`.
 - **Cancel** (`cancel_invoice`): if the invoice had drawn stock, it is **restored**
@@ -91,17 +92,24 @@ pricing, stock or invoices.
 
 ## Product variant attributes
 
-Products may optionally carry descriptive variant fields: `color` and `size`.
-`color` is limited to the 15-color palette exposed in stock-intake rows (black,
-gray, white, red, blue, green, yellow, orange, purple, pink, brown, beige, navy,
-gold, teal). `size` is a free-form **Size / Spec** field for actual size,
-capacity, measurements, model-specific descriptors, or whatever the product
-requires. These fields are nullable/blankable and never affect pricing, stock
-quantity, valuation, or permissions. Staff set/update variants while posting
-Opening Stock or Purchase Invoices; Product create/edit stays focused on identity
-and pricing, while product list/detail views show the available variants. Purchase
-invoice lines and sales invoice item lines snapshot the values used at intake/sale
-time, so a later product variant change does not rewrite old documents.
+Products can have stock-bearing `ProductVariant` buckets identified by `color`
+and `size`. `color` is limited to the 15-color palette exposed in stock-intake
+rows (black, gray, white, red, blue, green, yellow, orange, purple, pink, brown,
+beige, navy, gold, teal). `size` is a free-form **Size / Spec** field for actual
+size, capacity, measurements, model-specific descriptors, or whatever the product
+requires.
+
+`Product.stock_qty` remains the aggregate total. `ProductVariant.stock_qty`
+tracks the available quantity for a specific color/size bucket, so the same
+product can hold orange and blue stock at the same time without either
+overwriting the other. Pricing, cost, valuation, permissions, and low-stock rules
+remain product-level unless a future rule explicitly changes them. Staff create
+or top up variants while posting Opening Stock, Purchase Invoices, or variant
+aware manual Stock Movements; Product create/edit stays focused on identity and
+pricing. Product list/detail views show available variant swatches with
+quantities. Purchase invoice lines and sales invoice item lines snapshot the
+variant values used at intake/sale time, so later catalog changes do not rewrite
+old documents.
 
 ## Inventory
 
@@ -109,7 +117,9 @@ time, so a later product variant change does not rewrite old documents.
   authoritative); it is not editable on the product form. Use Opening Stock once
   for first adoption, Purchase Invoices for normal inbound stock, and manual
   Stock Movements only for one-off corrections/adjustments.
-- Movements are applied atomically (`F()` expression) on insert.
+- Movements are applied atomically (`F()` expression) on insert. When a movement
+  has a `variant`, both `Product.stock_qty` and `ProductVariant.stock_qty` move
+  by the same signed quantity.
 - Low stock = `track_stock and stock_qty ≤ reorder_level` (shown on the Workspace dashboard).
 
 ## Workspace dashboard
@@ -159,8 +169,10 @@ at once, one per row:
    transaction: each row create-or-reuses its `Product`, corrects its pricing
    when the admin edited those cells, and posts one **Stock In** `StockMovement`
    for the stored quantity (`reason="Opening balance"`, `reference="OPENING"`).
-   Stock still flows only through the ledger. A zero-quantity row reprices its
-   product without posting a movement; blank rows are dropped.
+   The row's color/size creates or reuses a matching `ProductVariant`, and the
+   movement points at that variant. Stock still flows only through the ledger. A
+   zero-quantity row reprices its product without posting a movement; blank rows
+   are dropped.
 3. It can only be applied once. After `reference="OPENING"` movements exist, the
    Stock Movements page switches the action to a read-only Opening Stock record
    at `/catalog/stock-movements/opening-stock/view/`; the posted movements remain
@@ -178,15 +190,19 @@ inbound-stock document that Opening Stock was never meant to be:
    `Supplier` record and snapshots supplier name/phone/address onto the invoice.
 2. The line grid reuses the Opening Stock product behavior. Each row is a new or
    existing `Product`; selecting an existing item autofills category, unit,
-   barcode, color, size/spec, import cost, markup, USD selling price, and
-   manual LYD price. Edits to cost/markup/USD/manual-LYD use the same row-scoped
-   price-sync rules as the Product form.
+   barcode, import cost, markup, USD selling price, and manual LYD price. If the
+   product has exactly one variant, its color/size may autofill; if it has
+   several, color/size stay explicit so the buyer can choose the correct bucket.
+   Edits to cost/markup/USD/manual-LYD use the same row-scoped price-sync rules
+   as the Product form.
 3. Submitting the invoice runs one transaction: it saves a `PurchaseInvoice` +
    `PurchaseInvoiceLine` snapshots, creates or updates the products, and posts
    one Stock In `StockMovement` per line with `reference=<purchase invoice no.>`
-   and `purchase_invoice` linked. Line rows snapshot product color and size/spec
-   alongside cost/pricing. This keeps `Product.stock_qty`
-   ledger-driven while giving staff an invoice-like document to view/print later.
+   and `purchase_invoice` linked. The line's color/size creates or reuses the
+   matching `ProductVariant`; the purchase line and movement both point to it and
+   snapshot the visible color/size alongside cost/pricing. This keeps
+   `Product.stock_qty` ledger-driven while giving staff an invoice-like document
+   to view/print later.
 4. Purchase invoices may carry the scan/photo/PDF attachment of the supplier's
    paper invoice (`PurchaseInvoice.attachment`, upload path
    `purchase_invoices/`). This is record-only and never affects totals or stock.
@@ -194,11 +210,12 @@ inbound-stock document that Opening Stock was never meant to be:
 ## Sales invoice variant selection
 
 When adding a product line on a sales invoice, the editor reads the selected
-product's current color and size/spec from catalog storage metadata. If either
-value exists, the line shows it as a selectable option; if not, the field remains
-blank. Saving the invoice snapshots `InvoiceItem.color` and `InvoiceItem.size`,
-and detail/print views show those snapped values under the line description.
-Services and custom lines keep color/size blank.
+product's in-stock `ProductVariant` rows. Available colors are shown as swatches
+and sizes/specs are shown in the size selector with quantities. Saving the draft
+stores `InvoiceItem.variant` plus `InvoiceItem.color` and `InvoiceItem.size`
+snapshots. Issuing the invoice draws down that exact variant bucket; blue stock
+cannot cover an orange shortage for the same product. Services and custom lines
+keep variant/color/size blank.
 
 ## Stock take (physical inventory count / جرد)
 

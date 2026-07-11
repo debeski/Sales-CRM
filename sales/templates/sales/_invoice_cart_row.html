@@ -1,0 +1,28 @@
+<div class="cart-row" data-cart-row data-kind="{{ form.instance.kind|default:'product' }}"
+     data-variant-stock="{% if form.instance.variant_id %}{{ form.instance.variant.stock_qty }}{% endif %}">
+    {{ form.id }}{{ form.kind }}{{ form.product }}{{ form.service }}{{ form.variant }}{{ form.color }}{{ form.size }}
+    <span class="d-none">{{ form.DELETE }}</span>
+    <span class="cart-thumb" data-cart-thumb>
+        {% if form.instance.kind == "service" %}<i class="bi bi-tools"></i>
+        {% elif form.instance.kind == "custom" %}<i class="bi bi-pencil"></i>
+        {% else %}<i class="bi bi-box-seam"></i>{% endif %}
+    </span>
+    <div class="cart-main">
+        <div class="cart-label fw-semibold text-truncate" data-cart-label>{{ form.instance.description }}</div>
+        {{ form.description }}
+        <div class="cart-meta small text-muted" data-cart-meta>{% if form.instance.color_label %}{{ form.instance.color_label }}{% endif %}{% if form.instance.size %}{% if form.instance.color_label %} · {% endif %}{{ form.instance.size }}{% endif %}</div>
+    </div>
+    <div class="cart-field">
+        <label class="cart-field-label">{{ DLUX_STRINGS.ui_unit_price_lyd }}</label>
+        {{ form.unit_price_lyd }}
+        {{ form.unit_price_lyd.errors }}
+    </div>
+    <div class="cart-field cart-field-qty">
+        <label class="cart-field-label">{{ DLUX_STRINGS.ui_qty }}</label>
+        {{ form.quantity }}
+        {{ form.quantity.errors }}
+    </div>
+    <div class="cart-line-total fw-semibold" data-cart-total>0.00</div>
+    <button type="button" class="btn btn-sm btn-link text-danger cart-remove" data-cart-remove
+            title="{{ DLUX_STRINGS.ui_remove|default:'Remove' }}"><i class="bi bi-trash"></i></button>
+</div>

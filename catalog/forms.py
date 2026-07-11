@@ -11,26 +11,10 @@ from dlux.utils import set_field_attrs
 from common.forms import build_grid_helper, translate_choice_fields, translate_help_text
 from finance.services import get_current_rate
 
-from .models import Category, Product, PurchaseInvoice, Service, StockMovement, Supplier
+from .models import Category, Product, PurchaseInvoice, Service, StockMovement, Supplier, PRODUCT_COLOR_SWATCHES
 
 
-COLOR_SWATCHES = {
-    Product.COLOR_BLACK: "#111111",
-    Product.COLOR_GRAY: "#808080",
-    Product.COLOR_WHITE: "#ffffff",
-    Product.COLOR_RED: "#dc3545",
-    Product.COLOR_BLUE: "#0d6efd",
-    Product.COLOR_GREEN: "#198754",
-    Product.COLOR_YELLOW: "#ffc107",
-    Product.COLOR_ORANGE: "#fd7e14",
-    Product.COLOR_PURPLE: "#6f42c1",
-    Product.COLOR_PINK: "#d63384",
-    Product.COLOR_BROWN: "#795548",
-    Product.COLOR_BEIGE: "#d8c3a5",
-    Product.COLOR_NAVY: "#001f54",
-    Product.COLOR_GOLD: "#d4af37",
-    Product.COLOR_TEAL: "#20c997",
-}
+COLOR_SWATCHES = PRODUCT_COLOR_SWATCHES
 
 
 class ColorPaletteWidget(forms.Widget):
@@ -232,14 +216,22 @@ class StockMovementForm(forms.ModelForm):
 
     class Meta:
         model = StockMovement
-        fields = ["product", "movement_type", "quantity", "reason", "reference"]
+        fields = ["product", "variant", "movement_type", "quantity", "reason", "reference"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         set_field_attrs(self)
         translate_choice_fields(self)
         translate_help_text(self)
-        build_grid_helper(self, [("product", "movement_type"), ("quantity", "reference"), ("reason",)])
+        build_grid_helper(self, [("product", "variant"), ("movement_type", "quantity"), ("reference",), ("reason",)])
+
+    def clean(self):
+        cleaned = super().clean()
+        product = cleaned.get("product")
+        variant = cleaned.get("variant")
+        if product and variant and variant.product_id != product.pk:
+            self.add_error("variant", get_strings().get("ui_invalid_product_variant", "Choose a variant for the selected product."))
+        return cleaned
 
 
 class PurchaseInvoiceForm(forms.ModelForm):

@@ -89,31 +89,62 @@ class InvoiceItemForm(forms.ModelForm):
     class Meta:
         model = InvoiceItem
         fields = [
-            "kind", "product", "service", "description", "color", "size",
+            "kind", "product", "service", "description", "variant", "color", "size",
             "unit_price_lyd", "quantity",
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Price may be left blank to auto-fill from the selected product/service.
-        self.fields["unit_price_lyd"].required = False
-        self.fields["description"].required = False
-        self.fields["color"].required = False
-        self.fields["size"].required = False
-        color_value = self.initial.get("color") or getattr(self.instance, "color", "") or ""
-        size_value = self.initial.get("size") or getattr(self.instance, "size", "") or ""
-        color_choices = [("", "---------")]
-        if color_value:
-            try:
-                from catalog.models import Product
-                color_label = dict(Product.COLOR_CHOICES).get(color_value, color_value)
-            except Exception:
-                color_label = color_value
-            color_choices.append((color_value, color_label))
-        self.fields["color"].widget = forms.Select(choices=color_choices)
-        self.fields["size"].widget = forms.Select(choices=[("", "---------"), *([(size_value, size_value)] if size_value else [])])
-        set_field_attrs(self, inline_labels=True)
+        from catalog.models import ProductVariant
+
+        # The item, variant, colour and size are chosen in the catalog picker and
+        # written into hidden inputs; only price and quantity stay editable in the
+        # cart row (description is editable for free-text "custom" lines only).
+        for name in ("kind", "product", "service", "variant", "color", "size", "description", "unit_price_lyd"):
+            self.fields[name].required = False
+        self.fields["variant"].queryset = ProductVariant.objects.select_related("product").all()
+        for name in ("kind", "product", "service", "variant", "color", "size"):
+            self.fields[name].widget = forms.HiddenInput()
+        self.fields["description"].widget = forms.TextInput(attrs={
+            "class": "form-control form-control-sm cart-desc d-none",
+            "placeholder": get_strings().get("ui_custom_line_name", "Custom item description"),
+        })
+        self.fields["unit_price_lyd"].widget = forms.NumberInput(attrs={
+            "class": "form-control form-control-sm text-end cart-price", "step": "0.01", "min": "0",
+            "inputmode": "decimal",
+        })
+        self.fields["quantity"].widget = forms.NumberInput(attrs={
+            "class": "form-control form-control-sm text-end cart-qty", "step": "0.01", "min": "0.01",
+            "inputmode": "decimal",
+        })
         translate_help_text(self)
+
+    def clean(self):
+        cleaned = super().clean()
+        product = cleaned.get("product")
+        variant = cleaned.get("variant")
+        color = cleaned.get("color") or ""
+        size = (cleaned.get("size") or "").strip()
+        raw_quantity = self.data.get(self.add_prefix("quantity")) if self.is_bound else None
+        has_line_data = bool(product or cleaned.get("service") or cleaned.get("description") or cleaned.get("unit_price_lyd") or color or size)
+        if has_line_data and raw_quantity in (None, "") and not self.errors.get("quantity"):
+            self.add_error("quantity", self.fields["quantity"].error_messages["required"])
+        if not product:
+            return cleaned
+        variants = list(product.variants.all())
+        if variant and variant.product_id != product.pk:
+            self.add_error("color", get_strings().get("ui_invalid_product_variant", "Choose an available color/size for this product."))
+            return cleaned
+        if not variant and variants:
+            available = [v for v in variants if v.stock_qty > 0]
+            matching = [v for v in variants if (v.color or "") == color and (v.size or "") == size]
+            if len(matching) == 1:
+                cleaned["variant"] = matching[0]
+            elif len(available) == 1:
+                cleaned["variant"] = available[0]
+            else:
+                self.add_error("color", get_strings().get("ui_required_product_variant", "Choose an available color/size."))
+        return cleaned
 
 
 # Inline formset that powers the multi-line invoice editor.
@@ -121,7 +152,7 @@ InvoiceItemFormSet = inlineformset_factory(
     Invoice,
     InvoiceItem,
     form=InvoiceItemForm,
-    extra=1,
+    extra=0,
     can_delete=True,
 )
 

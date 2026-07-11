@@ -18,6 +18,17 @@ from finance.models import ExchangeRate
 from .models import Invoice
 
 
+def _item_variant(item):
+    if item.variant_id:
+        return item.variant
+    if not item.product_id:
+        return None
+    color = item.color or ""
+    size = item.size or ""
+    matches = list(item.product.variants.filter(color=color, size=size))
+    return matches[0] if len(matches) == 1 else None
+
+
 @transaction.atomic
 def issue_invoice(invoice, user):
     """Move a draft invoice to *issued*: snapshot the rate record and draw down
@@ -28,30 +39,42 @@ def issue_invoice(invoice, user):
     if not invoice.items.exists():
         raise ValidationError(_("Cannot issue an invoice with no items."))
 
-    # Stock guard: aggregate demand per tracked product (a product may appear on
-    # several lines) and refuse to issue if any would go negative.
+    # Stock guard: aggregate demand per stock bucket. Variant-aware lines are
+    # checked against their own color/size bucket; legacy/no-variant lines still
+    # fall back to the aggregate product quantity.
     needs = defaultdict(lambda: Decimal("0"))
-    products = {}
-    for item in invoice.items.select_related("product"):
+    stock_refs = {}
+    for item in invoice.items.select_related("product", "variant"):
         if item.kind == item.KIND_PRODUCT and item.product_id and item.product.track_stock:
-            needs[item.product_id] += item.quantity
-            products[item.product_id] = item.product
+            variant = _item_variant(item)
+            key = ("variant", variant.pk) if variant else ("product", item.product_id)
+            needs[key] += item.quantity
+            stock_refs[key] = variant or item.product
 
-    shortages = [
-        _("%(name)s (need %(need)s, have %(have)s)")
-        % {"name": products[pid].name, "need": qty, "have": products[pid].stock_qty}
-        for pid, qty in needs.items()
-        if products[pid].stock_qty < qty
-    ]
+    shortages = []
+    for key, qty in needs.items():
+        ref = stock_refs[key]
+        have = ref.stock_qty
+        if have < qty:
+            if key[0] == "variant":
+                name = f"{ref.product.name} — {ref.display_label}"
+            else:
+                name = ref.name
+            shortages.append(
+                _("%(name)s (need %(need)s, have %(have)s)")
+                % {"name": name, "need": qty, "have": have}
+            )
     if shortages:
         raise ValidationError(_("Insufficient stock to issue: ") + "; ".join(shortages))
 
     invoice.exchange_rate_obj = ExchangeRate.objects.order_by("-created_at").first()
 
-    for item in invoice.items.select_related("product"):
+    for item in invoice.items.select_related("product", "variant"):
         if item.kind == item.KIND_PRODUCT and item.product_id and item.product.track_stock:
+            variant = _item_variant(item)
             StockMovement.objects.create(
                 product=item.product,
+                variant=variant,
                 movement_type=StockMovement.TYPE_OUT,
                 quantity=item.quantity,
                 reason=_("Sold on invoice %(no)s") % {"no": invoice.number},
@@ -76,10 +99,12 @@ def cancel_invoice(invoice, user):
         Invoice.STATUS_ISSUED, Invoice.STATUS_PARTIAL, Invoice.STATUS_PAID,
     )
     if was_issued:
-        for item in invoice.items.select_related("product"):
+        for item in invoice.items.select_related("product", "variant"):
             if item.kind == item.KIND_PRODUCT and item.product_id and item.product.track_stock:
+                variant = _item_variant(item)
                 StockMovement.objects.create(
                     product=item.product,
+                    variant=variant,
                     movement_type=StockMovement.TYPE_IN,
                     quantity=item.quantity,
                     reason=_("Cancelled invoice %(no)s") % {"no": invoice.number},

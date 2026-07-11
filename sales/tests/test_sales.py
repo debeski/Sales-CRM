@@ -7,7 +7,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
-from catalog.models import Category, Product, Service
+from catalog.models import Category, Product, ProductVariant, Service
 from finance.models import ExchangeRate
 from sales.models import Invoice, InvoiceItem, Payment
 from sales.services import cancel_invoice, issue_invoice
@@ -34,6 +34,54 @@ class InvoiceFormLayoutTests(TestCase):
                   "invoice_date", "discount_percent", "discount_amount", "notes"):
             self.assertIn(f'name="{f}"', html, f"header field {f} missing")
 
+    def test_missing_line_quantity_renders_visible_invalid_cell(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.test import RequestFactory
+
+        from sales.views import InvoiceCreateView
+
+        ExchangeRate.objects.create(rate=Decimal("6.50"))
+        user = get_user_model().objects.create_superuser("invoiceadmin", "i@example.com", "x")
+        product = Product.objects.create(name="Spare Key", cost_usd=Decimal("4.00"), price_usd=Decimal("6.00"))
+        data = {
+            "salesperson": "",
+            "customer": "",
+            "customer_name": "Walk-in",
+            "customer_phone": "",
+            "customer_address": "",
+            "invoice_date": "2026-07-11",
+            "discount_percent": "0.00",
+            "discount_amount": "0.00",
+            "notes": "",
+            "items-TOTAL_FORMS": "1",
+            "items-INITIAL_FORMS": "0",
+            "items-MIN_NUM_FORMS": "0",
+            "items-MAX_NUM_FORMS": "1000",
+            "items-0-id": "",
+            "items-0-kind": "product",
+            "items-0-product": str(product.pk),
+            "items-0-service": "",
+            "items-0-description": "",
+            "items-0-variant": "",
+            "items-0-color": "",
+            "items-0-size": "",
+            "items-0-unit_price_lyd": "10.00",
+            "items-0-quantity": "",
+        }
+        request = RequestFactory().post(reverse("sales:invoice_create"), data)
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.session.save()
+        request.user = user
+        request._messages = FallbackStorage(request)
+        response = InvoiceCreateView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('name="items-0-quantity"', html)
+        self.assertIn("errorlist", html)
+
 
 class SalesConfigScaffoldTests(SimpleTestCase):
     def test_urls_namespace_matches_app_name(self):
@@ -48,6 +96,12 @@ class PricingAndInvoiceTests(TestCase):
             name="Lock X1", category=self.cat,
             cost_usd=Decimal("40"), markup_percent=Decimal("25"),
             color=Product.COLOR_BLUE, size="Matte / 120x80 mm",
+        )
+        self.variant = ProductVariant.objects.create(
+            product=self.product,
+            color=Product.COLOR_BLUE,
+            size="Matte / 120x80 mm",
+            stock_qty=Decimal("10.00"),
         )
         self.service = Service.objects.create(
             name="Install", service_type="installation", price_usd=Decimal("20"),
@@ -64,13 +118,17 @@ class PricingAndInvoiceTests(TestCase):
     def test_invoice_editor_product_map_includes_variant_metadata(self):
         from sales.views import InvoiceCreateView
 
-        payload = json.loads(InvoiceCreateView()._price_map(Decimal("6.50")))
-        row = payload["product"][str(self.product.pk)]
+        payload = json.loads(InvoiceCreateView()._catalog_map(Decimal("6.50")))
+        row = next(p for p in payload["products"] if p["id"] == self.product.pk)
 
         self.assertEqual(row["price"], 325.0)
-        self.assertEqual(row["color"], Product.COLOR_BLUE)
-        self.assertEqual(row["color_label"], "Blue")
-        self.assertEqual(row["size"], "Matte / 120x80 mm")
+        self.assertEqual(row["name"], self.product.name)
+        variant = row["variants"][0]
+        self.assertEqual(variant["id"], self.variant.pk)
+        self.assertEqual(variant["color"], Product.COLOR_BLUE)
+        self.assertEqual(variant["color_label"], "Blue")
+        self.assertEqual(variant["size"], "Matte / 120x80 mm")
+        self.assertEqual(variant["stock_qty"], 10.0)
 
     def test_product_line_snapshots_variant_metadata(self):
         from sales.views import _apply_item_price
@@ -83,6 +141,7 @@ class PricingAndInvoiceTests(TestCase):
         _apply_item_price(item, inv)
 
         self.assertEqual(item.kind, InvoiceItem.KIND_PRODUCT)
+        self.assertEqual(item.variant_id, self.variant.pk)
         self.assertEqual(item.color, Product.COLOR_BLUE)
         self.assertEqual(item.size, "Matte / 120x80 mm")
 
@@ -156,6 +215,57 @@ class PricingAndInvoiceTests(TestCase):
         # Nothing changed: still a draft, stock untouched.
         self.assertEqual(inv.status, Invoice.STATUS_DRAFT)
         self.assertEqual(self.product.stock_qty, Decimal("1.00"))
+
+    def test_issue_checks_stock_per_color_size_variant(self):
+        from django.core.exceptions import ValidationError
+        from catalog.models import StockMovement
+
+        product = Product.objects.create(name="Spare Key", cost_usd=Decimal("4.00"), price_usd=Decimal("6.00"))
+        orange = ProductVariant.get_or_create_for(product, Product.COLOR_ORANGE, "13.56 MHz")
+        blue = ProductVariant.get_or_create_for(product, Product.COLOR_BLUE, "13.56 MHz")
+        StockMovement.objects.create(product=product, variant=orange, movement_type="in", quantity=Decimal("1.00"))
+        StockMovement.objects.create(product=product, variant=blue, movement_type="in", quantity=Decimal("10.00"))
+
+        inv = Invoice.objects.create(customer_name="Variant Buyer")
+        InvoiceItem.objects.create(
+            invoice=inv,
+            product=product,
+            variant=orange,
+            color=Product.COLOR_ORANGE,
+            size="13.56 MHz",
+            description="Spare Key Orange",
+            unit_price_lyd=Decimal("40.00"),
+            quantity=Decimal("2.00"),
+        )
+        inv.recalc_totals()
+
+        with self.assertRaises(ValidationError):
+            issue_invoice(inv, None)
+        inv.refresh_from_db()
+        product.refresh_from_db()
+        orange.refresh_from_db()
+        blue.refresh_from_db()
+        self.assertEqual(inv.status, Invoice.STATUS_DRAFT)
+        self.assertEqual(product.stock_qty, Decimal("11.00"))
+        self.assertEqual(orange.stock_qty, Decimal("1.00"))
+        self.assertEqual(blue.stock_qty, Decimal("10.00"))
+
+        inv.items.update(quantity=Decimal("1.00"))
+        issue_invoice(inv, None)
+        product.refresh_from_db()
+        orange.refresh_from_db()
+        blue.refresh_from_db()
+        self.assertEqual(product.stock_qty, Decimal("10.00"))
+        self.assertEqual(orange.stock_qty, Decimal("0.00"))
+        self.assertEqual(blue.stock_qty, Decimal("10.00"))
+
+        cancel_invoice(inv, None)
+        product.refresh_from_db()
+        orange.refresh_from_db()
+        blue.refresh_from_db()
+        self.assertEqual(product.stock_qty, Decimal("11.00"))
+        self.assertEqual(orange.stock_qty, Decimal("1.00"))
+        self.assertEqual(blue.stock_qty, Decimal("10.00"))
 
     def test_sales_report_aggregates(self):
         from sales.reports import build_sales_report, build_sales_report_xlsx, default_window
@@ -521,22 +631,139 @@ class DepositBatchTests(TestCase):
 class SeedDemoCommandTests(TestCase):
     def test_seed_demo_spread_idempotent_and_reset(self):
         from django.core.management import call_command
-        from catalog.models import Product
+        from catalog.models import Product, PurchaseInvoice, StockTake, Supplier
+        from finance.models import CashDeposit, Expense, StaffLedgerEntry
+        from sales.models import Delivery
 
         call_command("seed_demo", verbosity=0)
+        self.assertEqual(Product.objects.count(), 24)
+        self.assertEqual(Supplier.objects.count(), 4)
+        self.assertEqual(PurchaseInvoice.objects.count(), 4)
+        self.assertEqual(Delivery.objects.count(), 10)
+        self.assertEqual(Expense.objects.count(), 5)
+        self.assertEqual(StaffLedgerEntry.objects.count(), 7)
+        self.assertEqual(StockTake.objects.count(), 2)
+        self.assertEqual(CashDeposit.objects.count(), 3)
         self.assertTrue(Product.objects.filter(barcode="6291041500213").exists())
+        self.assertTrue(ProductVariant.objects.filter(color=Product.COLOR_GOLD, size__icontains="ANSI").exists())
         for status in ("paid", "partial", "issued", "cancelled", "draft"):
             self.assertTrue(
                 Invoice.objects.filter(status=status).exists(),
                 f"expected a {status} invoice",
             )
         self.assertTrue(Payment.objects.exists())
+        self.assertTrue(Payment.objects.filter(deposit__reference="DEP-SHIFT-001").exists())
 
         # Re-running does not pile up duplicate invoices.
         count = Invoice.objects.count()
         call_command("seed_demo", verbosity=0)
         self.assertEqual(Invoice.objects.count(), count)
+        self.assertEqual(PurchaseInvoice.objects.count(), 4)
 
         # --reset wipes then rebuilds to the same shape.
         call_command("seed_demo", "--reset", verbosity=0)
         self.assertEqual(Invoice.objects.count(), count)
+        self.assertEqual(Product.objects.count(), 24)
+        self.assertEqual(PurchaseInvoice.objects.count(), 4)
+
+
+class InvoicePickerTests(TestCase):
+    """POS-style catalog picker + cart on the sales invoice editor."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        ExchangeRate.objects.create(rate=Decimal("6.50"))
+        self.cat = Category.objects.create(name="Locks")
+        self.product = Product.objects.create(
+            name="Lock X1", category=self.cat, cost_usd=Decimal("40"), markup_percent=Decimal("25"),
+        )
+        self.variant = ProductVariant.objects.create(
+            product=self.product, color=Product.COLOR_BLUE, size="XL", stock_qty=Decimal("10.00"),
+        )
+        # Out-of-stock, stock-tracked, no variants -> must be excluded from the picker.
+        self.oos = Product.objects.create(name="Sold Out", cost_usd=Decimal("5"), track_stock=True)
+        self.service = Service.objects.create(
+            name="Install", service_type="installation", price_usd=Decimal("20"),
+        )
+        self.user = get_user_model().objects.create_superuser("picker", "p@example.com", "x")
+
+    def _req(self, method, url, data=None):
+        from django.contrib.messages.storage.fallback import FallbackStorage
+        from django.contrib.sessions.middleware import SessionMiddleware
+        from django.test import RequestFactory
+
+        rf = RequestFactory()
+        request = getattr(rf, method)(url, data or {})
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.session.save()
+        request.user = self.user
+        request._messages = FallbackStorage(request)
+        return request
+
+    def test_catalog_map_filters_stock_and_carries_service_icons(self):
+        from sales.views import InvoiceCreateView
+
+        payload = json.loads(InvoiceCreateView()._catalog_map(Decimal("6.50")))
+        ids = [p["id"] for p in payload["products"]]
+        self.assertIn(self.product.pk, ids)
+        self.assertNotIn(self.oos.pk, ids)  # out of stock, filtered out
+
+        svc = payload["services"][0]
+        self.assertEqual(svc["id"], self.service.pk)
+        self.assertEqual(svc["icon"], "bi-wrench")
+        self.assertTrue(svc["type_label"])
+
+    def test_create_view_renders_picker(self):
+        from sales.views import InvoiceCreateView
+
+        resp = InvoiceCreateView.as_view()(self._req("get", reverse("sales:invoice_create")))
+        html = resp.content.decode()
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("data-invoice-catalog", html)
+        self.assertIn("data-picker-grid", html)
+        self.assertIn('id="catalog-map"', html)
+        self.assertIn("invoice_editor.js", html)
+        self.assertNotIn('id="items-table"', html)  # old wide table gone
+
+    def _mgmt(self, rows):
+        data = {
+            "salesperson": "", "customer": "", "customer_name": "Walk-in",
+            "customer_phone": "", "customer_address": "", "invoice_date": "2026-07-11",
+            "discount_percent": "0.00", "discount_amount": "0.00", "notes": "",
+            "items-TOTAL_FORMS": str(len(rows)), "items-INITIAL_FORMS": "0",
+            "items-MIN_NUM_FORMS": "0", "items-MAX_NUM_FORMS": "1000",
+        }
+        for i, row in enumerate(rows):
+            for k, v in row.items():
+                data[f"items-{i}-{k}"] = v
+        return data
+
+    def test_create_saves_product_variant_line(self):
+        from sales.views import InvoiceCreateView
+
+        data = self._mgmt([{
+            "id": "", "kind": "product", "product": str(self.product.pk), "service": "",
+            "variant": str(self.variant.pk), "color": Product.COLOR_BLUE, "size": "XL",
+            "description": "Lock X1", "unit_price_lyd": "325.00", "quantity": "2",
+        }])
+        resp = InvoiceCreateView.as_view()(self._req("post", reverse("sales:invoice_create"), data))
+        self.assertEqual(resp.status_code, 302)
+        item = InvoiceItem.objects.get()
+        self.assertEqual(item.kind, InvoiceItem.KIND_PRODUCT)
+        self.assertEqual(item.variant_id, self.variant.pk)
+        self.assertEqual(item.line_total_lyd, Decimal("650.00"))
+
+    def test_create_saves_service_line(self):
+        from sales.views import InvoiceCreateView
+
+        data = self._mgmt([{
+            "id": "", "kind": "service", "product": "", "service": str(self.service.pk),
+            "variant": "", "color": "", "size": "", "description": "Install",
+            "unit_price_lyd": "", "quantity": "1",
+        }])
+        resp = InvoiceCreateView.as_view()(self._req("post", reverse("sales:invoice_create"), data))
+        self.assertEqual(resp.status_code, 302)
+        item = InvoiceItem.objects.get()
+        self.assertEqual(item.kind, InvoiceItem.KIND_SERVICE)
+        self.assertEqual(item.service_id, self.service.pk)

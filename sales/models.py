@@ -235,6 +235,10 @@ class InvoiceItem(models.Model):
         "catalog.Product", null=True, blank=True, on_delete=models.SET_NULL,
         related_name="invoice_items", verbose_name="Product",
     )
+    variant = models.ForeignKey(
+        "catalog.ProductVariant", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="invoice_items", verbose_name="Variant",
+    )
     service = models.ForeignKey(
         "catalog.Service", null=True, blank=True, on_delete=models.SET_NULL,
         related_name="invoice_items", verbose_name="Service",
@@ -285,6 +289,8 @@ class InvoiceItem(models.Model):
             raise ValidationError({"product": "Select a product for a product line."})
         if self.kind == self.KIND_SERVICE and not self.service_id:
             raise ValidationError({"service": "Select a service for a service line."})
+        if self.variant_id and self.product_id and self.variant.product_id != self.product_id:
+            raise ValidationError({"variant": "Variant must belong to the selected product."})
 
     def save(self, *args, **kwargs):
         # Snapshot a description from the source if the user left it blank.

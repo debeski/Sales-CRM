@@ -21,20 +21,41 @@ from .filters import (
 )
 from .forms import OpeningStockLineFormSet, PurchaseInvoiceForm, PurchaseInvoiceLineFormSet
 from .models import (
-    Category, Product, PurchaseInvoice, PurchaseInvoiceLine, Service, StockMovement,
+    Category, Product, ProductVariant, PurchaseInvoice, PurchaseInvoiceLine, Service, StockMovement,
     StockTake, StockTakeLine, Supplier,
+    product_color_hex,
+)
+from .product_layouts import (
+    PRODUCTS_LAYOUT_GRID, PRODUCTS_LAYOUT_LIGHT, PRODUCTS_LAYOUT_NS, PRODUCTS_LAYOUTS,
+    get_products_layout,
 )
 from .tables import (
-    CategoryTable, ProductTable, PurchaseInvoiceTable, ServiceTable, StockMovementTable,
-    StockTakeTable, SupplierTable,
+    CategoryTable, ProductLightTable, ProductTable, PurchaseInvoiceTable, ServiceTable,
+    StockMovementTable, StockTakeTable, SupplierTable,
 )
+
+
+def _variant_payload(variant):
+    return {
+        "id": variant.pk,
+        "color": variant.color or "",
+        "color_label": variant.color_label,
+        "color_hex": product_color_hex(variant.color),
+        "size": variant.size or "",
+        "stock_qty": float(variant.stock_qty or 0),
+        "label": variant.display_label,
+    }
 
 
 def _product_autofill_map_json():
     """JSON {pk: {cost, markup, price_usd, price_lyd, category, unit, barcode, ...}}
     used by both Opening Stock and Purchase Invoice grids."""
     data = {}
-    for p in Product.objects.all():
+    for p in Product.objects.prefetch_related("variants"):
+        variants = list(p.variants.all().order_by("color", "size", "pk"))
+        default_variant = variants[0] if len(variants) == 1 else None
+        fallback_color = (p.color or "") if not variants else ""
+        fallback_size = (p.size or "") if not variants else ""
         data[str(p.pk)] = {
             "cost": float(p.cost_usd or 0),
             "markup": float(p.markup_percent or 0),
@@ -43,8 +64,9 @@ def _product_autofill_map_json():
             "category": str(p.category_id or ""),
             "unit": p.unit,
             "barcode": p.barcode,
-            "color": p.color or "",
-            "size": p.size or "",
+            "color": (default_variant.color if default_variant else fallback_color),
+            "size": (default_variant.size if default_variant else fallback_size),
+            "variants": [_variant_payload(v) for v in variants],
         }
     return json.dumps(data)
 
@@ -64,8 +86,9 @@ def _save_product_from_intake_line(cd):
     product.unit = cd.get("unit") or product.unit
     if cd.get("barcode"):
         product.barcode = cd["barcode"]
-    product.color = cd.get("color") or None
-    product.size = cd.get("size") or None
+    if product.pk is None:
+        product.color = cd.get("color") or None
+        product.size = cd.get("size") or None
     product.cost_usd = cd.get("cost_usd") or Decimal("0")
     product.markup_percent = cd.get("markup_percent") or Decimal("0")
     product.price_usd = cd.get("price_usd") or Decimal("0")
@@ -73,6 +96,10 @@ def _save_product_from_intake_line(cd):
     product.track_stock = True
     product.save()
     return product
+
+
+def _variant_from_intake_line(product, cd):
+    return ProductVariant.get_or_create_for(product, cd.get("color"), cd.get("size"))
 
 
 def _opening_stock_used():
@@ -102,8 +129,31 @@ class ProductListView(ScopedListView):
     filterset_class = ProductFilter
     page_title_key = "page_products"
     page_subtitle_key = "page_products_sub"
-    # Live sync of the cost/markup/USD/LYD price fields in the create-edit modal.
-    extra_scripts = ("catalog/js/price_sync.js",)
+    # Live sync of the cost/markup/USD/LYD price fields in the create-edit modal,
+    # plus the per-user layout switcher (table / grid / light).
+    extra_scripts = ("catalog/js/price_sync.js", "catalog/js/products_layout.js")
+
+    def get_layout(self):
+        return get_products_layout(self.request)
+
+    def get_table_class(self):
+        # "light" swaps to the minimal columns table; "table"/"grid" keep the full one.
+        if self.get_layout() == PRODUCTS_LAYOUT_LIGHT:
+            return ProductLightTable
+        return ProductTable
+
+    def get_template_names(self):
+        if self.get_layout() == PRODUCTS_LAYOUT_GRID:
+            return ["catalog/product_grid.html"]
+        # Table + Light both use the product list template (adds the layout toggle).
+        return ["catalog/product_list.html"]
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["products_layout"] = self.get_layout()
+        ctx["products_layout_ns"] = PRODUCTS_LAYOUT_NS
+        ctx["products_layouts"] = PRODUCTS_LAYOUTS
+        return ctx
 
 
 class ServiceListView(ScopedListView):
@@ -300,8 +350,10 @@ class OpeningStockEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
         product = _save_product_from_intake_line(cd)
         qty = cd.get("quantity") or Decimal("0")
         if qty > 0:
+            variant = _variant_from_intake_line(product, cd)
             StockMovement.objects.create(
                 product=product,
+                variant=variant,
                 movement_type=StockMovement.TYPE_IN,
                 quantity=qty,
                 reason="Opening balance",
@@ -357,7 +409,7 @@ class OpeningStockDetailView(LoginRequiredMixin, PermissionRequiredMixin, Templa
         ctx = super().get_context_data(**kwargs)
         movements = list(
             StockMovement.objects.filter(reference="OPENING")
-            .select_related("product", "created_by")
+            .select_related("product", "variant", "created_by")
             .order_by("created_at", "pk")
         )
         ctx["movements"] = movements
@@ -436,16 +488,18 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Vie
             invoice.save()
             for cd in kept:
                 product = _save_product_from_intake_line(cd)
+                variant = _variant_from_intake_line(product, cd)
                 qty = cd.get("quantity") or Decimal("0")
                 PurchaseInvoiceLine.objects.create(
                     invoice=invoice,
                     product=product,
+                    variant=variant,
                     category=product.category,
                     description=product.name,
                     unit=product.unit,
                     barcode=product.barcode,
-                    color=product.color,
-                    size=product.size,
+                    color=variant.color or None,
+                    size=variant.size or None,
                     cost_usd=product.cost_usd,
                     markup_percent=product.markup_percent,
                     price_usd=product.price_usd,
@@ -454,6 +508,7 @@ class PurchaseInvoiceCreateView(LoginRequiredMixin, PermissionRequiredMixin, Vie
                 )
                 StockMovement.objects.create(
                     product=product,
+                    variant=variant,
                     movement_type=StockMovement.TYPE_IN,
                     quantity=qty,
                     reason=f"Purchase invoice {invoice.number}",
@@ -491,8 +546,8 @@ class PurchaseInvoiceDetailView(LoginRequiredMixin, PermissionRequiredMixin, Det
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["lines"] = self.object.lines.select_related("product", "category")
-        ctx["movements"] = self.object.stock_movements.select_related("product").order_by("created_at", "pk")
+        ctx["lines"] = self.object.lines.select_related("product", "variant", "category")
+        ctx["movements"] = self.object.stock_movements.select_related("product", "variant").order_by("created_at", "pk")
         return ctx
 
 
@@ -507,7 +562,7 @@ class PurchaseInvoicePrintView(LoginRequiredMixin, PermissionRequiredMixin, Deta
         from dlux.translations import get_current_language_code
 
         ctx = super().get_context_data(**kwargs)
-        ctx["lines"] = self.object.lines.select_related("product", "category")
+        ctx["lines"] = self.object.lines.select_related("product", "variant", "category")
         lang = get_current_language_code(self.request)
         ctx["doc_lang"] = lang
         ctx["is_rtl"] = lang.startswith("ar")

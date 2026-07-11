@@ -37,6 +37,23 @@ class ProductVariantFieldTests(TestCase):
         self.assertNotIn("color", form.fields)
         self.assertNotIn("size", form.fields)
 
+    def test_product_detail_and_table_render_available_variant_quantities(self):
+        from decimal import Decimal
+
+        from catalog.models import Product, ProductVariant
+        from catalog.tables import ProductTable
+
+        product = Product.objects.create(name="Spare Key")
+        ProductVariant.objects.create(product=product, color=Product.COLOR_ORANGE, size="13.56 MHz", stock_qty=Decimal("2.00"))
+        ProductVariant.objects.create(product=product, color=Product.COLOR_BLUE, size="13.56 MHz", stock_qty=Decimal("3.00"))
+
+        detail_html = str(product.get_modal_context()["extra_detail_fields"][-1]["value"])
+        table_html = str(ProductTable([]).render_color(product))
+        self.assertIn("Orange", detail_html)
+        self.assertIn("Blue", detail_html)
+        self.assertIn("× 2", detail_html)
+        self.assertIn("× 3", table_html)
+
 
 class ProductPricingConsistencyTests(TestCase):
     """The detail view read a stored ``price_usd`` of 0 when only cost + markup

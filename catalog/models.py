@@ -25,6 +25,36 @@ from finance.services import get_current_rate, usd_to_lyd
 
 TWO_PLACES = Decimal("0.01")
 
+PRODUCT_COLOR_SWATCHES = {
+    "black": "#111111",
+    "gray": "#808080",
+    "white": "#ffffff",
+    "red": "#dc3545",
+    "blue": "#0d6efd",
+    "green": "#198754",
+    "yellow": "#ffc107",
+    "orange": "#fd7e14",
+    "purple": "#6f42c1",
+    "pink": "#d63384",
+    "brown": "#795548",
+    "beige": "#d8c3a5",
+    "navy": "#001f54",
+    "gold": "#d4af37",
+    "teal": "#20c997",
+}
+
+
+def product_color_hex(color):
+    return PRODUCT_COLOR_SWATCHES.get(color or "", "transparent")
+
+
+def product_color_label(color):
+    from common.i18n import t
+
+    if not color:
+        return t("ui_no_color", "No color")
+    return t(f"color_{color}", dict(Product.COLOR_CHOICES).get(color, color))
+
 
 def _image_detail_row(instance, label):
     """A dlux detail row rendering the instance's image as a thumbnail (HTML), or
@@ -209,10 +239,42 @@ class Product(ScopedModel):
 
     def get_color_display(self):
         """Translated color label for dlux detail/list rendering."""
-        from common.i18n import t
         if not self.color:
             return ""
-        return t(f"color_{self.color}", dict(self.COLOR_CHOICES).get(self.color, self.color))
+        return product_color_label(self.color)
+
+    def stock_variants(self, include_zero=False):
+        qs = self.variants.all().order_by("color", "size", "pk")
+        if not include_zero:
+            qs = qs.filter(stock_qty__gt=0)
+        return qs
+
+    def variant_summary_html(self, include_zero=False):
+        from django.utils.html import format_html
+        from django.utils.safestring import mark_safe
+
+        variants = list(self.stock_variants(include_zero=include_zero))
+        if not variants:
+            return "—"
+        parts = []
+        for variant in variants:
+            color = variant.color or ""
+            bg = product_color_hex(color)
+            border = "#111111" if color == self.COLOR_WHITE else (bg if color else "var(--bs-border-color,#adb5bd)")
+            title = variant.display_label
+            parts.append(format_html(
+                '<span class="d-inline-flex align-items-center gap-1 me-2 mb-1" title="{}">'
+                '<span style="display:inline-block;width:.95rem;height:.95rem;border-radius:999px;'
+                'border:2px solid {};background:{};box-shadow:inset 0 0 0 1px rgba(255,255,255,.45);"></span>'
+                '<span class="small">{} × {}</span>'
+                '</span>',
+                f"{title}: {variant.stock_qty:g}",
+                border,
+                bg,
+                title,
+                f"{variant.stock_qty:g}",
+            ))
+        return mark_safe("".join(str(part) for part in parts))
 
     @property
     def effective_price_usd(self):
@@ -240,16 +302,23 @@ class Product(ScopedModel):
                 "value": f"{price:,.2f}" if price is not None else "—",
             }
         ]
-        if self.color:
+        if self.stock_variants().exists():
             rows.append({
-                "label": t("label_product_color", "Color"),
-                "value": self.get_color_display(),
+                "label": t("label_product_available_variants", "Available variants"),
+                "is_html": True,
+                "value": self.variant_summary_html(),
             })
-        if self.size:
-            rows.append({
-                "label": t("label_product_size", "Size"),
-                "value": self.size,
-            })
+        else:
+            if self.color:
+                rows.append({
+                    "label": t("label_product_color", "Color"),
+                    "value": self.get_color_display(),
+                })
+            if self.size:
+                rows.append({
+                    "label": t("label_product_size", "Size"),
+                    "value": self.size,
+                })
         image_row = _image_detail_row(self, t("label_product_image", "Image"))
         if image_row:
             rows.insert(0, image_row)
@@ -258,6 +327,71 @@ class Product(ScopedModel):
     @property
     def is_low_stock(self):
         return self.track_stock and self.stock_qty <= self.reorder_level
+
+
+class ProductVariant(models.Model):
+    """Stock-bearing color/size bucket for a Product.
+
+    Product.color/size remain as legacy descriptive fields, but every new stock
+    movement that knows a color/size should point at one of these rows so
+    orange and blue stock are tracked independently while Product.stock_qty keeps
+    the aggregate total.
+    """
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="variants", verbose_name="Product")
+    color = models.CharField(
+        max_length=16, choices=Product.COLOR_CHOICES, blank=True, default="", verbose_name="Color"
+    )
+    size = models.CharField(max_length=120, blank=True, default="", verbose_name="Size / Spec")
+    stock_qty = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"), verbose_name="Stock Qty")
+
+    class Meta:
+        verbose_name = "Product Variant"
+        verbose_name_plural = "Product Variants"
+        default_permissions = ()
+        ordering = ["product__name", "color", "size"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "color", "size"], name="uniq_product_variant_color_size"),
+        ]
+        indexes = [
+            models.Index(fields=["product", "color", "size"], name="catalog_variant_lookup_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.product} — {self.display_label}"
+
+    @staticmethod
+    def normalize_color(color):
+        return (color or "").strip()
+
+    @staticmethod
+    def normalize_size(size):
+        return (size or "").strip()
+
+    @classmethod
+    def get_or_create_for(cls, product, color=None, size=None):
+        return cls.objects.get_or_create(
+            product=product,
+            color=cls.normalize_color(color),
+            size=cls.normalize_size(size),
+        )[0]
+
+    @property
+    def color_label(self):
+        return product_color_label(self.color) if self.color else ""
+
+    @property
+    def display_label(self):
+        from common.i18n import t
+
+        parts = []
+        if self.color:
+            parts.append(self.color_label)
+        else:
+            parts.append(t("ui_no_color", "No color"))
+        if self.size:
+            parts.append(self.size)
+        return " / ".join(parts)
 
 
 class Service(ScopedModel):
@@ -422,6 +556,10 @@ class PurchaseInvoiceLine(models.Model):
     product = models.ForeignKey(
         Product, on_delete=models.PROTECT, related_name="purchase_invoice_lines", verbose_name="Product"
     )
+    variant = models.ForeignKey(
+        ProductVariant, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="purchase_invoice_lines", verbose_name="Variant",
+    )
     category = models.ForeignKey(
         Category, null=True, blank=True, on_delete=models.SET_NULL,
         related_name="purchase_invoice_lines", verbose_name="Category",
@@ -506,6 +644,10 @@ class StockMovement(ScopedModel):
     product = models.ForeignKey(
         Product, on_delete=models.PROTECT, related_name="movements", verbose_name="Product"
     )
+    variant = models.ForeignKey(
+        ProductVariant, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="movements", verbose_name="Variant",
+    )
     movement_type = models.CharField(
         max_length=12, choices=TYPE_CHOICES, default=TYPE_IN, verbose_name="Type"
     )
@@ -544,12 +686,23 @@ class StockMovement(ScopedModel):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+        if self.variant_id:
+            if self.product_id is None:
+                self.product = self.variant.product
+            elif self.variant.product_id != self.product_id:
+                from django.core.exceptions import ValidationError
+
+                raise ValidationError("Stock movement variant must belong to the selected product.")
         super().save(*args, **kwargs)
         # Apply the delta to the product on first insert only (ledger is append-only).
         if is_new and self.product.track_stock:
             Product.objects.filter(pk=self.product_id).update(
                 stock_qty=models.F("stock_qty") + self.signed_quantity
             )
+            if self.variant_id:
+                ProductVariant.objects.filter(pk=self.variant_id).update(
+                    stock_qty=models.F("stock_qty") + self.signed_quantity
+                )
 
 
 class StockTake(ScopedModel):

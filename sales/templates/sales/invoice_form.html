@@ -1,7 +1,10 @@
 {% extends "dlux/form_base.html" %}
+{% load static %}
 {% load crispy_forms_tags %}
 
 {% block title %}{% if is_edit %}{{ DLUX_STRINGS.ui_edit_invoice }}{% else %}{{ DLUX_STRINGS.ui_new_invoice }}{% endif %}{% endblock %}
+
+{% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'sales/css/invoice_editor.css' %}?v=20260711a">{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -18,14 +21,9 @@
 
     <form method="post" novalidate>
         {% csrf_token %}
-
-        {# Borderless section — no solid white card surface, so the fields sit on
-           the themed page background instead of a stark white slab. #}
         <section class="mb-4">
             <h2 class="h6 fw-semibold mb-3">{{ DLUX_STRINGS.ui_customer_details }}</h2>
-            {# {% crispy %} TAG, not the |crispy filter — the filter drops form.helper (the multi-column grid). #}
             {% crispy form %}
-            {# Suggestions for the customer combobox (one search-and-add field). #}
             <datalist id="customer-datalist">
                 {% for c in customers %}
                 <option value="{{ c.name }}" data-id="{{ c.pk }}" data-phone="{{ c.phone }}" data-address="{{ c.address }}"></option>
@@ -33,63 +31,68 @@
             </datalist>
         </section>
 
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-                <span class="fw-semibold">{{ DLUX_STRINGS.ui_line_items }}</span>
-                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" id="add-line">
-                    <i class="bi bi-plus-lg me-1"></i>{{ DLUX_STRINGS.ui_add_line }}
+        <div class="dlux-table-shell mb-4" data-invoice-catalog
+             data-str-perjob="{{ DLUX_STRINGS.ui_per_job|default:'Per job' }}"
+             data-str-onlyleft="{{ DLUX_STRINGS.ui_only_left|default:'Only {n} in stock' }}"
+             data-str-items="{{ DLUX_STRINGS.ui_items_count|default:'{n} item(s)' }}">
+            <div class="p-3 border-bottom d-flex flex-wrap align-items-center gap-2">
+                <div class="btn-group btn-group-sm" role="group" data-picker-mode-switch>
+                    <button type="button" class="btn btn-primary" data-picker-mode="products">
+                        <i class="bi bi-box-seam me-1"></i>{{ DLUX_STRINGS.models_product|default:"Products" }}
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-picker-mode="services">
+                        <i class="bi bi-tools me-1"></i>{{ DLUX_STRINGS.models_service|default:"Services" }}
+                    </button>
+                </div>
+                <div class="input-group input-group-sm invoice-picker-search">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" data-picker-search autocomplete="off"
+                           placeholder="{{ DLUX_STRINGS.ui_search_items|default:'Search items…' }}">
+                </div>
+                <select class="form-select form-select-sm w-auto" data-picker-category>
+                    <option value="">{{ DLUX_STRINGS.ui_all_categories|default:"All categories" }}</option>
+                    {% for c in categories %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill ms-auto" data-add-custom-line>
+                    <i class="bi bi-pencil me-1"></i>{{ DLUX_STRINGS.ui_custom_line|default:"Custom line" }}
                 </button>
             </div>
-            <div class="card-body p-0">
-                {{ formset.management_form }}
-                {% if formset.non_form_errors %}
-                    <div class="alert alert-danger m-3">{{ formset.non_form_errors }}</div>
-                {% endif %}
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0" id="items-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="min-width:180px">{{ DLUX_STRINGS.label_product }}</th>
-                                <th style="min-width:180px">{{ DLUX_STRINGS.label_service }}</th>
-                                <th style="min-width:160px">{{ DLUX_STRINGS.ui_description }}</th>
-                                <th style="min-width:130px">{{ DLUX_STRINGS.label_invoiceitem_color|default:"Color" }}</th>
-                                <th style="min-width:150px">{{ DLUX_STRINGS.label_invoiceitem_size|default:"Size / Spec" }}</th>
-                                <th class="text-end" style="min-width:120px">{{ DLUX_STRINGS.ui_unit_price_lyd }}</th>
-                                <th class="text-end" style="width:100px">{{ DLUX_STRINGS.ui_qty }}</th>
-                                <th class="text-end" style="min-width:120px">{{ DLUX_STRINGS.ui_total }}</th>
-                                <th style="width:48px"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="items-body">
-                            {% for itemform in formset %}
-                            <tr class="line-row">
-                                {{ itemform.id }}{{ itemform.kind.as_hidden }}
-                                <td>{{ itemform.product }}</td>
-                                <td>{{ itemform.service }}</td>
-                                <td>{{ itemform.description }}</td>
-                                <td>{{ itemform.color }}</td>
-                                <td>{{ itemform.size }}</td>
-                                <td>{{ itemform.unit_price_lyd }}</td>
-                                <td>{{ itemform.quantity }}</td>
-                                <td class="text-end fw-semibold line-total">0.00</td>
-                                <td class="text-center">
-                                    <span class="d-none">{{ itemform.DELETE }}</span>
-                                    <button type="button" class="btn btn-sm btn-link text-danger del-line" title="Remove">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                        <tfoot>
-                            <tr class="table-light">
-                                <td colspan="7" class="text-end fw-semibold">{{ DLUX_STRINGS.ui_subtotal }}</td>
-                                <td class="text-end fw-semibold" id="subtotal-cell">0.00</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
+            <div class="p-3">
+                <div class="invoice-picker-grid" data-picker-grid></div>
+                <div class="text-center text-muted py-4 d-none" data-picker-empty>
+                    {{ DLUX_STRINGS.ui_no_items_stock|default:"No matching items in stock." }}
                 </div>
+            </div>
+        </div>
+
+        <div class="dlux-table-shell mb-4">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                <span class="fw-semibold">{{ DLUX_STRINGS.ui_line_items }}</span>
+                <span class="small text-muted" data-cart-count></span>
+            </div>
+            {{ formset.management_form }}
+            {% if formset.non_form_errors %}
+                <div class="alert alert-danger m-3">{{ formset.non_form_errors }}</div>
+            {% endif %}
+            <div class="cart-head d-none d-lg-flex px-3 pt-3 small text-muted">
+                <span class="cart-head-item">{{ DLUX_STRINGS.ui_description }}</span>
+                <span class="cart-head-price">{{ DLUX_STRINGS.ui_unit_price_lyd }}</span>
+                <span class="cart-head-qty">{{ DLUX_STRINGS.ui_qty }}</span>
+                <span class="cart-head-total">{{ DLUX_STRINGS.ui_total }}</span>
+                <span class="cart-head-x"></span>
+            </div>
+            <div data-cart-body>
+                {% for form in formset %}
+                {% include "sales/_invoice_cart_row.html" %}
+                {% endfor %}
+            </div>
+            <div class="text-center text-muted py-5 px-3" data-cart-empty>
+                <i class="bi bi-cart3 fs-3 d-block mb-2"></i>{{ DLUX_STRINGS.ui_cart_empty|default:"Pick items above to add them to this invoice." }}
+            </div>
+            <div class="d-flex justify-content-end align-items-baseline gap-2 p-3 border-top">
+                <span class="text-muted">{{ DLUX_STRINGS.ui_subtotal }}</span>
+                <span class="fw-bold fs-5" id="subtotal-cell">0.00</span>
+                <span class="text-muted small">LYD</span>
             </div>
         </div>
 
@@ -103,129 +106,16 @@
     </form>
 </div>
 
-{# Template row for cloning #}
-<template id="empty-form-row">
-    <tr class="line-row">
-        {{ formset.empty_form.id }}{{ formset.empty_form.kind.as_hidden }}
-        <td>{{ formset.empty_form.product }}</td>
-        <td>{{ formset.empty_form.service }}</td>
-        <td>{{ formset.empty_form.description }}</td>
-        <td>{{ formset.empty_form.color }}</td>
-        <td>{{ formset.empty_form.size }}</td>
-        <td>{{ formset.empty_form.unit_price_lyd }}</td>
-        <td>{{ formset.empty_form.quantity }}</td>
-        <td class="text-end fw-semibold line-total">0.00</td>
-        <td class="text-center">
-            <span class="d-none">{{ formset.empty_form.DELETE }}</span>
-            <button type="button" class="btn btn-sm btn-link text-danger del-line" title="Remove">
-                <i class="bi bi-trash"></i>
-            </button>
-        </td>
-    </tr>
+<template id="empty-cart-row">
+    {% include "sales/_invoice_cart_row.html" with form=formset.empty_form %}
 </template>
 {% endblock %}
 
 {% block scripts %}
 {{ block.super }}
-<script id="price-map" type="application/json">{{ price_map_json|safe }}</script>
-<script>
-(function () {
-    const prices = JSON.parse(document.getElementById('price-map').textContent || '{}');
-    const prefix = "{{ formset.prefix }}";
-    const totalForms = document.getElementById('id_' + prefix + '-TOTAL_FORMS');
-    const body = document.getElementById('items-body');
-
-    const fmt = (n) => (isNaN(n) ? 0 : n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
-    function q(row, suffix) { return row.querySelector('[name$="-' + suffix + '"]'); }
-
-    function recalcRow(row) {
-        const price = parseFloat(q(row, 'unit_price_lyd')?.value) || 0;
-        const qty = parseFloat(q(row, 'quantity')?.value) || 0;
-        const cell = row.querySelector('.line-total');
-        if (cell) cell.textContent = fmt(price * qty);
-        return price * qty;
-    }
-
-    function recalcAll() {
-        let subtotal = 0;
-        body.querySelectorAll('.line-row').forEach((row) => {
-            if (row.style.display === 'none') return;
-            subtotal += recalcRow(row);
-        });
-        document.getElementById('subtotal-cell').textContent = fmt(subtotal);
-    }
-
-    function setSelectOptions(select, value, label) {
-        if (!select) return;
-        const selected = value || '';
-        const text = label || value || '---------';
-        select.innerHTML = '';
-        select.add(new Option('---------', ''));
-        if (selected) select.add(new Option(text, selected));
-        select.value = selected;
-    }
-
-    function autofill(row, kind, id) {
-        const map = prices[kind] || {};
-        const entry = map[id];
-        const price = (entry && typeof entry === 'object') ? entry.price : entry;
-        const priceInput = q(row, 'unit_price_lyd');
-        const kindInput = q(row, 'kind');
-        if (kindInput) kindInput.value = kind;
-        if (priceInput && price !== undefined && !priceInput.dataset.touched) {
-            priceInput.value = price;
-        }
-        if (kind === 'product') {
-            setSelectOptions(q(row, 'color'), entry?.color || '', entry?.color_label || entry?.color || '');
-            setSelectOptions(q(row, 'size'), entry?.size || '', entry?.size || '');
-        } else {
-            setSelectOptions(q(row, 'color'), '', '');
-            setSelectOptions(q(row, 'size'), '', '');
-        }
-        recalcAll();
-    }
-
-    function wireRow(row) {
-        const prod = q(row, 'product');
-        const svc = q(row, 'service');
-        const price = q(row, 'unit_price_lyd');
-        const qty = q(row, 'quantity');
-        if (prod) prod.addEventListener('change', () => {
-            if (prod.value) { if (svc) svc.value = ''; autofill(row, 'product', prod.value); }
-        });
-        if (svc) svc.addEventListener('change', () => {
-            if (svc.value) { if (prod) prod.value = ''; autofill(row, 'service', svc.value); }
-        });
-        if (price) { price.addEventListener('input', () => { price.dataset.touched = '1'; recalcAll(); }); }
-        if (qty) qty.addEventListener('input', recalcAll);
-        const del = row.querySelector('.del-line');
-        if (del) del.addEventListener('click', () => {
-            const delInput = q(row, 'DELETE');
-            if (delInput) { delInput.checked = true; row.style.display = 'none'; }
-            else { row.remove(); }
-            recalcAll();
-        });
-    }
-
-    document.getElementById('add-line').addEventListener('click', () => {
-        const idx = parseInt(totalForms.value, 10);
-        const html = document.getElementById('empty-form-row').innerHTML.replace(/__prefix__/g, idx);
-        const holder = document.createElement('tbody');
-        holder.innerHTML = html.trim();
-        const tr = holder.firstElementChild;
-        body.appendChild(tr);
-        totalForms.value = idx + 1;
-        wireRow(tr);
-    });
-
-    body.querySelectorAll('.line-row').forEach(wireRow);
-    recalcAll();
-})();
-</script>
-<script>
-// Customer combobox: match the typed/selected name against the datalist, set the
-// hidden customer FK, and autofill phone/address from the saved customer record.
+<script id="catalog-map" type="application/json">{{ catalog_map_json|safe }}</script>
+<script src="{% static 'sales/js/invoice_editor.js' %}?v=20260711a" nonce="{{ request.csp_nonce }}" defer></script>
+<script nonce="{{ request.csp_nonce }}">
 (function () {
     const nameInput = document.querySelector('[data-customer-input]');
     if (!nameInput) return;
@@ -238,7 +128,6 @@
         const v = (value || '').trim().toLowerCase();
         return options.find((o) => o.value.trim().toLowerCase() === v) || null;
     }
-    // Fill only empty or previously auto-filled fields, so manual entries survive.
     function setAuto(el, val) {
         if (!el) return;
         if (el.value && el.dataset.autofilled !== '1') return;
@@ -252,7 +141,7 @@
             setAuto(phone, opt.dataset.phone);
             setAuto(address, opt.dataset.address);
         } else if (hiddenFk) {
-            hiddenFk.value = '';  // a new name → a new customer is created on save
+            hiddenFk.value = '';
         }
     }
     [phone, address].forEach((el) => {

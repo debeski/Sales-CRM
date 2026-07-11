@@ -1,0 +1,93 @@
+{% extends "catalog/product_list.html" %}
+{% load dlux_tags %}
+
+{% block list_body %}
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-3" data-products-grid>
+    {% for row in table.paginated_rows %}
+    {% with p=row.record %}
+    <div class="col">
+        <div class="dlux-table-shell h-100 p-3 d-flex flex-column">
+            <div class="d-flex gap-3">
+                <span class="flex-shrink-0 d-inline-flex align-items-center justify-content-center rounded border overflow-hidden"
+                      style="width:56px;height:56px;background:var(--table-row,#f8f9fa)">
+                    {% if p.image %}
+                    <img src="{{ p.image.url }}" alt="" style="width:56px;height:56px;object-fit:cover">
+                    {% else %}
+                    <i class="bi bi-image text-muted fs-4"></i>
+                    {% endif %}
+                </span>
+                <div class="flex-grow-1" style="min-width:0">
+                    <div class="fw-semibold text-truncate" title="{{ p.name }}">{{ p.name }}</div>
+                    {% if p.category %}<div class="text-muted small text-truncate">{{ p.category }}</div>{% endif %}
+                    {% if p.barcode %}<div class="text-muted small font-monospace text-truncate">{{ p.barcode }}</div>{% endif %}
+                </div>
+            </div>
+
+            <div class="mt-3 d-flex justify-content-between align-items-end gap-2">
+                <div class="fw-bold">
+                    {{ p.selling_price_lyd|floatformat:2 }}<span class="text-muted small ms-1">LYD</span>
+                </div>
+                <div class="text-end small">
+                    {% if p.track_stock %}
+                    <span class="{% if p.is_low_stock %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                        <i class="bi bi-box-seam me-1"></i>{{ p.stock_qty|floatformat:"-2" }}
+                    </span>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if p.stock_variants %}
+            <div class="mt-2">{{ p.variant_summary_html }}</div>
+            {% endif %}
+
+            <div class="mt-auto pt-3">
+                <button type="button" class="btn btn-sm btn-outline-secondary w-100 rounded-pill"
+                        data-dynamic-modal="{% url 'scoped_modal_manager' 'catalog' 'Product' p.pk %}?action=view"
+                        data-modal-title="{{ p.name }}">
+                    <i class="bi bi-arrows-angle-expand me-1"></i>{{ DLUX_STRINGS.ui_view_details|default:"Details" }}
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endwith %}
+    {% empty %}
+    <div class="col-12">
+        <div class="dlux-table-shell p-4 text-center text-muted">
+            {{ DLUX_STRINGS.ui_no_products|default:"No products found." }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if table.page and table.page.has_other_pages %}
+<nav class="mt-4" aria-label="{{ DLUX_STRINGS.list_label|default:'Pagination' }}">
+    <ul class="pagination justify-content-center mb-0">
+        {% if table.page.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="{% dlux_querystring table.prefixed_page_field table.page.previous_page_number %}">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span></li>
+        {% endif %}
+        <li class="page-item disabled">
+            <span class="page-link">
+                {{ table.page.number }} / {{ table.paginator.num_pages }}
+            </span>
+        </li>
+        {% if table.page.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="{% dlux_querystring table.prefixed_page_field table.page.next_page_number %}">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,26 @@
+<div class="btn-group btn-group-sm" role="group"
+     data-products-layout-switch
+     data-products-layout-ns="{{ products_layout_ns }}"
+     aria-label="{{ DLUX_STRINGS.options_products_layout|default:'Products layout' }}">
+    <button type="button"
+            class="btn {% if products_layout == 'table' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+            data-products-layout-option="table"
+            aria-pressed="{% if products_layout == 'table' %}true{% else %}false{% endif %}"
+            title="{{ DLUX_STRINGS.products_layout_table|default:'Table' }}">
+        <i class="bi bi-table"></i><span class="d-none d-lg-inline ms-1">{{ DLUX_STRINGS.products_layout_table|default:"Table" }}</span>
+    </button>
+    <button type="button"
+            class="btn {% if products_layout == 'grid' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+            data-products-layout-option="grid"
+            aria-pressed="{% if products_layout == 'grid' %}true{% else %}false{% endif %}"
+            title="{{ DLUX_STRINGS.products_layout_grid|default:'Grid' }}">
+        <i class="bi bi-grid-3x3-gap"></i><span class="d-none d-lg-inline ms-1">{{ DLUX_STRINGS.products_layout_grid|default:"Grid" }}</span>
+    </button>
+    <button type="button"
+            class="btn {% if products_layout == 'light' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+            data-products-layout-option="light"
+            aria-pressed="{% if products_layout == 'light' %}true{% else %}false{% endif %}"
+            title="{{ DLUX_STRINGS.products_layout_light|default:'Light' }}">
+        <i class="bi bi-list-ul"></i><span class="d-none d-lg-inline ms-1">{{ DLUX_STRINGS.products_layout_light|default:"Light" }}</span>
+    </button>
+</div>

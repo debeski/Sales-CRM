@@ -98,14 +98,40 @@ class InvoiceListView(ScopedListView):
 # --------------------------------------------------------------------------- #
 # Invoice editor (multi-line, full page)
 # --------------------------------------------------------------------------- #
+#: Bootstrap-Icons for service tiles in the picker (by service_type), used when a
+#: service has no uploaded image — so services stay visually distinct in the grid.
+SERVICE_TYPE_ICONS = {
+    "installation": "bi-wrench",
+    "maintenance": "bi-gear",
+    "warranty": "bi-shield-check",
+    "delivery": "bi-truck",
+    "other": "bi-tools",
+}
+
+
 def _apply_item_price(item, invoice):
     """Derive frozen unit price / kind from the chosen product or service when
     the user didn't type a price explicitly."""
     if item.product_id:
         item.kind = item.KIND_PRODUCT
         item.service = None
-        item.color = item.color or item.product.color
-        item.size = item.size or item.product.size
+        if item.variant_id:
+            if item.variant.product_id != item.product_id:
+                raise ValidationError(_("Selected color/size does not belong to the selected product."))
+        else:
+            color = item.color or ""
+            size = (item.size or "").strip()
+            matches = list(item.product.variants.filter(color=color, size=size))
+            if len(matches) == 1:
+                item.variant = matches[0]
+            elif item.product.variants.count() == 1:
+                item.variant = item.product.variants.first()
+        if item.variant_id:
+            item.color = item.variant.color or None
+            item.size = item.variant.size or None
+        else:
+            item.color = item.color or item.product.color
+            item.size = item.size or item.product.size
         if item.unit_price_lyd in (None, ""):
             item.unit_price_lyd = item.product.selling_price_lyd(invoice.exchange_rate) or Decimal("0")
         item.unit_price_usd = item.product.effective_price_usd
@@ -113,6 +139,7 @@ def _apply_item_price(item, invoice):
     elif item.service_id:
         item.kind = item.KIND_SERVICE
         item.product = None
+        item.variant = None
         item.color = None
         item.size = None
         item.unit_cost_usd = None  # services carry no goods cost
@@ -121,6 +148,7 @@ def _apply_item_price(item, invoice):
         item.unit_price_usd = item.service.price_usd
     else:
         item.kind = item.KIND_CUSTOM
+        item.variant = None
         item.color = None
         item.size = None
         if item.unit_price_lyd in (None, ""):
@@ -131,25 +159,63 @@ class _InvoiceEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
     raise_exception = True
     template_name = "sales/invoice_form.html"
 
-    def _price_map(self, rate):
-        """JSON {kind: {id: lyd_price}} so the editor can auto-fill unit prices."""
-        from catalog.models import Product, Service
+    def _catalog_map(self, rate):
+        """JSON catalog for the POS-style item picker: in-stock products (with
+        their in-stock colour/size variants) and services (each with a type icon
+        or its own image). The client renders the tile grid and fills the hidden
+        line fields from it; price stays editable in the cart row."""
+        from catalog.models import Product, Service, product_color_hex
 
-        products = {}
-        for p in Product.objects.filter(is_active=True):
-            products[str(p.pk)] = {
+        products = []
+        qs = Product.objects.filter(is_active=True).select_related("category").prefetch_related("variants")
+        for p in qs:
+            variants = [
+                {
+                    "id": v.pk,
+                    "color": v.color or "",
+                    "color_label": v.color_label,
+                    "color_hex": product_color_hex(v.color),
+                    "size": v.size or "",
+                    "stock_qty": float(v.stock_qty or 0),
+                    "label": v.display_label,
+                }
+                for v in p.variants.filter(stock_qty__gt=0).order_by("color", "size", "pk")
+            ]
+            # Only surface sellable items: a product with in-stock variants, or a
+            # variant-less product that either has stock or isn't stock-tracked.
+            has_stock = bool(variants) or (not p.track_stock) or (p.stock_qty or 0) > 0
+            if variants or p.track_stock:
+                if not has_stock:
+                    continue
+            products.append({
+                "id": p.pk,
+                "name": p.name,
+                "category": p.category.name if p.category_id else "",
+                "category_id": p.category_id or 0,
+                "image": p.image.url if p.image else "",
                 "price": float(p.selling_price_lyd(rate) or 0),
-                "color": p.color or "",
-                "color_label": p.get_color_display() if p.color else "",
-                "size": p.size or "",
-            }
-        services = {
-            str(s.pk): {"price": float(s.selling_price_lyd(rate) or 0)}
-            for s in Service.objects.filter(is_active=True)
-        }
-        return json.dumps({"product": products, "service": services})
+                "track_stock": bool(p.track_stock),
+                "stock_qty": float(p.stock_qty or 0),
+                "variants": variants,
+            })
+
+        services = []
+        for s in Service.objects.filter(is_active=True):
+            price = s.selling_price_lyd(rate)
+            services.append({
+                "id": s.pk,
+                "name": s.name,
+                "type": s.service_type,
+                "type_label": s.get_service_type_display(),
+                "icon": SERVICE_TYPE_ICONS.get(s.service_type, SERVICE_TYPE_ICONS["other"]),
+                "image": s.image.url if s.image else "",
+                "price": float(price) if price is not None else None,
+            })
+        return json.dumps({"products": products, "services": services})
 
     def _context(self, request, form, formset, invoice=None):
+        from catalog.models import Category
+
         rate = invoice.exchange_rate if invoice else get_current_rate()
         return {
             "form": form,
@@ -158,7 +224,8 @@ class _InvoiceEditorView(LoginRequiredMixin, PermissionRequiredMixin, View):
             "current_rate": rate,
             "has_rate": has_configured_rate(),
             "is_edit": invoice is not None,
-            "price_map_json": self._price_map(rate),
+            "catalog_map_json": self._catalog_map(rate),
+            "categories": Category.objects.filter(is_active=True).order_by("name"),
             # Feeds the customer combobox <datalist> + JS autofill of phone/address.
             # Customers are private, so a rep only ever sees/binds their own book.
             "customers": apply_ownership(

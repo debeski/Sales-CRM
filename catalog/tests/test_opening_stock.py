@@ -13,7 +13,7 @@ from django.contrib.auth.models import Permission
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory, TestCase
 
-from catalog.models import Category, Product, StockMovement
+from catalog.models import Category, Product, ProductVariant, StockMovement
 from catalog.views import OpeningStockEditorView
 
 User = get_user_model()
@@ -74,6 +74,20 @@ class OpeningStockViewTests(TestCase):
         self.assertEqual(mv.movement_type, StockMovement.TYPE_IN)
         self.assertEqual(mv.quantity, Decimal("12.00"))
         self.assertEqual(mv.reference, "OPENING")
+
+    def test_existing_item_opening_stock_keeps_distinct_color_variants(self):
+        existing = Product.objects.create(name="Spare Key", cost_usd=Decimal("4.00"), price_usd=Decimal("6.00"))
+        resp = self._post([
+            self._row(product=str(existing.pk), name="Spare Key", color=Product.COLOR_ORANGE, size="13.56 MHz", quantity="2"),
+            self._row(product=str(existing.pk), name="Spare Key", color=Product.COLOR_BLUE, size="13.56 MHz", quantity="3"),
+        ])
+        self.assertEqual(resp.status_code, 302)
+        existing.refresh_from_db()
+        self.assertEqual(existing.stock_qty, Decimal("5.00"))
+        self.assertEqual(
+            set(ProductVariant.objects.filter(product=existing).values_list("color", "stock_qty")),
+            {(Product.COLOR_ORANGE, Decimal("2.00")), (Product.COLOR_BLUE, Decimal("3.00"))},
+        )
 
     def test_existing_item_gets_stock_and_reprice(self):
         existing = Product.objects.create(name="Existing", cost_usd=Decimal("10.00"), price_usd=Decimal("12.00"))

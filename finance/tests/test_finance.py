@@ -81,6 +81,52 @@ class StaffLedgerTests(TestCase):
         advance.confirm(self.staff)
         self.assertEqual(self.account.balance_lyd, Decimal("60.00"))
 
+    def test_balance_matrix_for_all_signed_entry_types_and_statuses(self):
+        posted_rows = [
+            (StaffLedgerEntry.TYPE_SERVICE_EARNED, Decimal("100.10")),
+            (StaffLedgerEntry.TYPE_REIMBURSEMENT, Decimal("25.25")),
+            (StaffLedgerEntry.TYPE_RECEIVE_FROM_STAFF, Decimal("14.65")),
+            (StaffLedgerEntry.TYPE_ADJUSTMENT, Decimal("10.00")),
+            (StaffLedgerEntry.TYPE_ADVANCE, Decimal("20.05")),
+            (StaffLedgerEntry.TYPE_LOAN, Decimal("30.10")),
+            (StaffLedgerEntry.TYPE_CASH_CHECKOUT, Decimal("40.15")),
+            (StaffLedgerEntry.TYPE_ITEM_CHECKOUT, Decimal("50.20")),
+            (StaffLedgerEntry.TYPE_PAY_STAFF, Decimal("60.25")),
+        ]
+        for entry_type, amount in posted_rows:
+            StaffLedgerEntry.objects.create(
+                account=self.account,
+                entry_type=entry_type,
+                amount_lyd=amount,
+                requires_user_confirmation=False,
+                created_by=self.manager,
+            )
+        StaffLedgerEntry.objects.create(
+            account=self.account,
+            entry_type=StaffLedgerEntry.TYPE_ADVANCE,
+            amount_lyd=Decimal("999.99"),
+            created_by=self.manager,
+        )
+        disputed = StaffLedgerEntry.objects.create(
+            account=self.account,
+            entry_type=StaffLedgerEntry.TYPE_SERVICE_EARNED,
+            amount_lyd=Decimal("777.77"),
+            requires_user_confirmation=False,
+            created_by=self.manager,
+        )
+        disputed.dispute(self.staff)
+        void = StaffLedgerEntry.objects.create(
+            account=self.account,
+            entry_type=StaffLedgerEntry.TYPE_REIMBURSEMENT,
+            amount_lyd=Decimal("333.33"),
+            requires_user_confirmation=False,
+            created_by=self.manager,
+        )
+        void.void(self.manager)
+
+        self.assertEqual(self.account.balance_lyd, Decimal("-50.75"))
+        self.assertEqual(self.account.pending_count, 1)
+
     def test_pending_entry_notifies_the_staff_user(self):
         from dlux.models import DluxNotificationState
 

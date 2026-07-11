@@ -43,7 +43,7 @@ Create / edit / view / delete are handled by the DjangoLux dynamic modal manager
         <div class="no-print mb-3">{% crispy filter.form %}</div>
     {% endif %}
 
-    {% render_table table %}
+    {% block list_body %}{% render_table table %}{% endblock %}
 </div>
 {% endblock %}
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, Product, PurchaseInvoice, PurchaseInvoiceLine, Service, StockMovement, Supplier
+from .models import Category, Product, ProductVariant, PurchaseInvoice, PurchaseInvoiceLine, Service, StockMovement, Supplier
 
 
 @admin.register(Category)
@@ -23,6 +23,14 @@ class ProductAdmin(admin.ModelAdmin):
     readonly_fields = ("stock_qty",)
 
 
+@admin.register(ProductVariant)
+class ProductVariantAdmin(admin.ModelAdmin):
+    list_display = ("product", "color", "size", "stock_qty")
+    list_filter = ("color",)
+    search_fields = ("product__name", "product__sku", "size")
+    readonly_fields = ("stock_qty",)
+
+
 @admin.register(Service)
 class ServiceAdmin(admin.ModelAdmin):
     list_display = ("name", "service_type", "price_usd", "price_lyd_override", "is_active")
@@ -32,7 +40,7 @@ class ServiceAdmin(admin.ModelAdmin):
 
 @admin.register(StockMovement)
 class StockMovementAdmin(admin.ModelAdmin):
-    list_display = ("product", "movement_type", "quantity", "reference", "purchase_invoice", "created_at")
+    list_display = ("product", "variant", "movement_type", "quantity", "reference", "purchase_invoice", "created_at")
     list_filter = ("movement_type",)
     search_fields = ("product__name", "reference", "purchase_invoice__number")
 

@@ -11,7 +11,7 @@ from django.test import RequestFactory
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from catalog.models import Product, PurchaseInvoice, StockMovement, Supplier
+from catalog.models import Product, ProductVariant, PurchaseInvoice, StockMovement, Supplier
 from catalog.views import (
     OpeningStockDetailView,
     OpeningStockEditorView,
@@ -117,16 +117,44 @@ class PurchaseInvoiceTests(TestCase):
         self.assertEqual(product.price_usd, Decimal("50.00"))
         self.assertEqual(product.color, Product.COLOR_BLUE)
         self.assertEqual(product.size, "120x80x30 mm")
+        variant = ProductVariant.objects.get(product=product, color=Product.COLOR_BLUE, size="120x80x30 mm")
+        self.assertEqual(variant.stock_qty, Decimal("5.00"))
 
         line = invoice.lines.get()
         self.assertEqual(line.product_id, product.pk)
+        self.assertEqual(line.variant_id, variant.pk)
         self.assertEqual(line.quantity, Decimal("5.00"))
         self.assertEqual(line.color, Product.COLOR_BLUE)
         self.assertEqual(line.size, "120x80x30 mm")
         movement = StockMovement.objects.get(product=product)
+        self.assertEqual(movement.variant_id, variant.pk)
         self.assertEqual(movement.reference, invoice.number)
         self.assertEqual(movement.purchase_invoice_id, invoice.pk)
         self.assertEqual(movement.movement_type, StockMovement.TYPE_IN)
+
+    def test_same_product_purchase_lines_keep_distinct_color_size_stock(self):
+        product = Product.objects.create(name="Spare Key", cost_usd=Decimal("4.00"), price_usd=Decimal("6.00"))
+        data = self._post_data([
+            self._row(product=str(product.pk), name="Spare Key", color=Product.COLOR_ORANGE, size="13.56 MHz", cost_usd="4.00", price_usd="6.00", quantity="2"),
+            self._row(product=str(product.pk), name="Spare Key", color=Product.COLOR_BLUE, size="13.56 MHz", cost_usd="4.00", price_usd="6.00", quantity="3"),
+        ])
+        self._post(data)
+
+        product.refresh_from_db()
+        orange = ProductVariant.objects.get(product=product, color=Product.COLOR_ORANGE, size="13.56 MHz")
+        blue = ProductVariant.objects.get(product=product, color=Product.COLOR_BLUE, size="13.56 MHz")
+
+        self.assertEqual(product.stock_qty, Decimal("5.00"))
+        self.assertEqual(orange.stock_qty, Decimal("2.00"))
+        self.assertEqual(blue.stock_qty, Decimal("3.00"))
+        self.assertEqual(
+            set(product.purchase_invoice_lines.values_list("color", "quantity")),
+            {(Product.COLOR_ORANGE, Decimal("2.00")), (Product.COLOR_BLUE, Decimal("3.00"))},
+        )
+        self.assertEqual(
+            set(product.movements.values_list("variant__color", "quantity")),
+            {(Product.COLOR_ORANGE, Decimal("2.00")), (Product.COLOR_BLUE, Decimal("3.00"))},
+        )
 
     def test_existing_product_is_reused_and_repriced(self):
         existing = Product.objects.create(name="Existing", cost_usd=Decimal("10.00"), price_usd=Decimal("12.00"))
@@ -179,6 +207,12 @@ class PurchaseInvoiceTests(TestCase):
             color=Product.COLOR_GOLD,
             size="Large / 30x20x10 cm",
         )
+        ProductVariant.objects.create(
+            product=existing,
+            color=Product.COLOR_GOLD,
+            size="Large / 30x20x10 cm",
+            stock_qty=Decimal("6.00"),
+        )
 
         resp = self._get_create()
         self.assertEqual(resp.status_code, 200)
@@ -196,6 +230,8 @@ class PurchaseInvoiceTests(TestCase):
         self.assertEqual(row["unit"], Product.UNIT_BOX)
         self.assertEqual(row["color"], Product.COLOR_GOLD)
         self.assertEqual(row["size"], "Large / 30x20x10 cm")
+        self.assertEqual(row["variants"][0]["color"], Product.COLOR_GOLD)
+        self.assertEqual(row["variants"][0]["stock_qty"], 6.0)
 
     def test_purchase_invoice_create_starts_with_one_empty_row(self):
         resp = self._get_create()

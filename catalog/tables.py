@@ -75,11 +75,51 @@ class ProductTable(DluxTable):
         return t(f"unit_{record.unit}", record.get_unit_display())
 
     def render_color(self, record):
+        summary = record.variant_summary_html()
+        if summary != "—":
+            return summary
         return record.get_color_display() if record.color else "—"
+
+    def render_size(self, record):
+        sizes = [
+            v.size for v in record.stock_variants()
+            if v.size
+        ]
+        if sizes:
+            unique = list(dict.fromkeys(sizes))
+            return ", ".join(unique)
+        return record.size or "—"
 
     def render_stock_qty(self, record):
         if not record.track_stock:
             # Django 6.0's format_html requires a placeholder arg; pass the dash.
+            return format_html('<span class="text-muted">{}</span>', "—")
+        if record.is_low_stock:
+            return format_html('<span class="text-danger fw-semibold">{}</span>', f"{record.stock_qty:g}")
+        return f"{record.stock_qty:g}"
+
+
+class ProductLightTable(DluxTable):
+    """Minimal Products table for the "light" layout — name, price, stock and
+    active only. Everything else (image, sku, barcode, category, unit, variants)
+    stays in the record's detail modal (`Product.get_modal_context`), for a
+    clutter-free list. Row actions still open that detail/edit modal."""
+
+    price_lyd = tables.Column(
+        empty_values=(), verbose_name="Price (LYD)", orderable=False
+    )
+    stock_qty = tables.Column(verbose_name="Stock")
+
+    class Meta(DluxTable.Meta):
+        model = Product
+        fields = ("name", "price_lyd", "stock_qty", "is_active")
+        dlux_actions = True
+
+    def render_price_lyd(self, record):
+        return _fmt_lyd(record.selling_price_lyd())
+
+    def render_stock_qty(self, record):
+        if not record.track_stock:
             return format_html('<span class="text-muted">{}</span>', "—")
         if record.is_low_stock:
             return format_html('<span class="text-danger fw-semibold">{}</span>', f"{record.stock_qty:g}")
@@ -109,11 +149,14 @@ class ServiceTable(DluxTable):
 class StockMovementTable(DluxTable):
     class Meta(DluxTable.Meta):
         model = StockMovement
-        fields = ("product", "movement_type", "quantity", "reference", "created_by", "created_at")
+        fields = ("product", "variant", "movement_type", "quantity", "reference", "created_by", "created_at")
         dlux_actions = True
 
     def render_movement_type(self, record):
         return t(f"mtype_{record.movement_type}", record.get_movement_type_display())
+
+    def render_variant(self, record):
+        return record.variant.display_label if record.variant_id else "—"
 
 
 class PurchaseInvoiceTable(DluxTable):
