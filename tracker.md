@@ -3,7 +3,7 @@
 ## Part 1: Project Related
 
 ### Current Verified Snapshot:
-Django POS/ERP on django-lux 1.4.4 (host venv now symlinked to mounted source `../pkg-django-lux/dlux`, same as dev compose). Apps: finance, catalog, sales, common. USD-base pricing -> LYD via ExchangeRate; sales invoices freeze rate/line prices/costs; purchase/opening stock post inbound stock. v0.3.0 is tagged; VERSION/CHANGELOG at v0.4.0 (seed/math tests, stock-bearing variants, per-user+global Products layout). Current baseline: 130 pass, 0 skip.
+Django POS/ERP on django-lux 1.4.4 (host venv now symlinked to mounted source `../pkg-django-lux/dlux`, same as dev compose). Apps: finance, catalog, sales, common. USD-base pricing -> LYD via ExchangeRate; sales invoices freeze rate/line prices/costs; purchase/opening stock post inbound stock. v0.4.0 is tagged; VERSION/CHANGELOG at v0.4.1 for dlux requirement bump; mistaken v0.4.1 tag removed local+origin. Current baseline: 130 pass, 0 skip.
 
 ### Current Project Adopted Standards:
 - Scoped models via dlux ScopedModel; list pages via common.ScopedListView + dlux modal_manager.
@@ -28,6 +28,7 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [ ] Optional: inject per-list Add button into the filter bar (config "buttons") vs current separate top-right button.
   - [ ] Browser smoke-test modal edit/delete (row actions) — combobox verified via test client.
 - **Completed Recently:**
+  - [x] (v0.4.1) Release metadata correction: added CHANGELOG v0.4.1 entry for `django-lux[updater]>=1.4.3`→`>=1.4.4`, set VERSION to 0.4.1, and deleted the prematurely-created `v0.4.1` tag locally and from origin so it can be recreated after commit.
   - [x] (v0.4.0) Sales invoice POS catalog picker + cart (Idea 2): picker panel (Products/Services toggle + search + category) renders in-stock tiles client-side from new `_catalog_map` (variants-at-add as chips w/ stock; services get image or `SERVICE_TYPE_ICONS` icon). Picked → compact cart list (`_invoice_cart_row.html`) w/ editable price/qty, live subtotal, over-stock soft-warn, remove, + Custom line. `InvoiceItemForm` fields hidden except price/qty/desc; formset `extra=0`. Save path (`_apply_item_price`) untouched. New `sales/static/sales/{css,js}/invoice_editor.*` (reuses `.dlux-table-shell`). EN/AR. +4 tests, 2 updated. 134 pass.
   - [x] (v0.4.0) Per-user Products layout table/grid/light, resolved per-user override→global admin default→table (`catalog.product_layouts.get_products_layout`). Per-user pref in `Profile.preferences['app'][ns]`; GLOBAL default via dlux 1.4.4 `register_app_settings` → `SystemSettings.extra_config['app'][ns]['default_layout']`, read by `get_default_products_layout`/`get_app_system_config`. `ProductListView` branches: table=`ProductTable`, light=`ProductLightTable`, grid=`product_grid.html` store cards (variant swatches, expand→`scoped_modal_manager ?action=view`, `.dlux-table-shell`). Switch: header toggle + `/sys/options` `register_card` picker (`catalog/dlux_options.py`); `products_layout.js`→`window.updateAppPreference`. Added `{% block list_body %}` to `scoped_list.html`. EN/AR. Needs dlux≥1.4.4 (defensive import). +13 tests.
   - [x] (v0.4.0) Bumped host venv dlux 1.2.2→1.4.4 by symlinking site-packages/dlux → mounted source `../pkg-django-lux/dlux` (old moved to `.xpose/venv-site-packages/`); `requirements.txt` `>=1.4.4`; migrated dev sqlite up (catalog/dlux/finance/sales migrations). Full suite 130 pass; check clean.
@@ -50,10 +51,10 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [x] (v0.1.3-v0.1.5) Caddy edge + portfolio split, composer-updater topology, dashboard rates, customer/deposit comboboxes, translated filters/choices/permissions, seed demo.
 
 ### One-line info about last verified Tests:
-2026-07-11: dlux 1.4.4 — full suite 134 pass, 0 skip; project `makemigrations --check` clean (no new migrations for invoice-picker makeover — form/formset only).
+2026-07-11: release metadata only after full suite 134 pass baseline; `git diff --check` clean; local+origin `v0.4.1` tag absent.
 
 ### One-line info about last time edited Docs:
-docs/ARCHITECTURE.md — Products layout section now documents per-user→global-default→table resolution + `register_app_settings`; header dlux version → 1.4.4.
+CHANGELOG.md — added v0.4.1 dlux requirement bump entry; no docs/code behavior changes this turn.
 
 ## Part 2: Global
 
