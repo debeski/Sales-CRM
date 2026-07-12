@@ -174,6 +174,7 @@ class StockMovementListView(ScopedListView):
     template_name = "catalog/stock_movement_list.html"  # adds the Opening-Stock button
     page_title_key = "page_stock_movements"
     page_subtitle_key = "page_stock_movements_sub"
+    extra_scripts = ("catalog/js/stock_movement.js",)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

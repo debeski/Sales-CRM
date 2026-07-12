@@ -54,6 +54,21 @@ class ProductVariantFieldTests(TestCase):
         self.assertIn("× 2", detail_html)
         self.assertIn("× 3", table_html)
 
+    def test_stock_movement_variant_options_tagged_with_owning_product(self):
+        from decimal import Decimal
+
+        from catalog.forms import StockMovementForm
+        from catalog.models import Product, ProductVariant
+
+        p1 = Product.objects.create(name="Alpha", cost_usd=Decimal("1"), price_usd=Decimal("2"))
+        p2 = Product.objects.create(name="Beta", cost_usd=Decimal("1"), price_usd=Decimal("2"))
+        v1 = ProductVariant.objects.create(product=p1, color=Product.COLOR_ORANGE)
+        v2 = ProductVariant.objects.create(product=p2, color=Product.COLOR_BLUE)
+
+        html = str(StockMovementForm()["variant"])
+        self.assertIn('value="{}" data-product="{}"'.format(v1.pk, p1.pk), html)
+        self.assertIn('value="{}" data-product="{}"'.format(v2.pk, p2.pk), html)
+
 
 class ProductPricingConsistencyTests(TestCase):
     """The detail view read a stored ``price_usd`` of 0 when only cost + markup

@@ -211,15 +211,32 @@ class ServiceForm(forms.ModelForm):
         ])
 
 
+class VariantProductSelect(forms.Select):
+    variant_product_map = {}
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        raw = getattr(value, "value", value)
+        product_id = self.variant_product_map.get(str(raw))
+        if product_id is not None:
+            option["attrs"]["data-product"] = str(product_id)
+        return option
+
+
 class StockMovementForm(forms.ModelForm):
     refresh_parent = True
 
     class Meta:
         model = StockMovement
         fields = ["product", "variant", "movement_type", "quantity", "reason", "reference"]
+        widgets = {"variant": VariantProductSelect}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        variant_field = self.fields["variant"]
+        variant_field.widget.variant_product_map = {
+            str(pk): pid for pk, pid in variant_field.queryset.values_list("pk", "product_id")
+        }
         set_field_attrs(self)
         translate_choice_fields(self)
         translate_help_text(self)

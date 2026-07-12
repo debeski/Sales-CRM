@@ -4,8 +4,13 @@
 DjangoLux middleware), so this works inside table ``render_*`` methods, services,
 and views without threading a request through.
 """
+from django.utils.functional import lazy
+
 from dlux.translations import get_strings
 
 
 def t(key, fallback=""):
     return get_strings().get(key, fallback or key)
+
+
+lazy_t = lazy(t, str)

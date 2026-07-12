@@ -2,5 +2,15 @@
 <p class="text-muted small mb-3">
     {{ DLUX_STRINGS.options_products_layout_desc|default:"Choose how your Products page lists items: full table, a store-style card grid, or a minimal light table." }}
 </p>
+{% if products_layout_selector_html %}
+<div id="div_id_products_layout" class="mb-3"
+     data-products-layout-switch
+     data-products-layout-ns="{{ products_layout_ns }}"
+     data-app-pref-url-template="{% url 'update_app_preference' '__namespace__' %}"
+     data-saved-message="{{ DLUX_STRINGS.options_products_layout_saved|default:'Products layout saved.' }}">
+    {{ products_layout_selector_html }}
+</div>
+{% else %}
 {% include "catalog/_products_layout_toggle.html" %}
-<script src="{% static 'catalog/js/products_layout.js' %}" nonce="{{ request.csp_nonce }}" defer></script>
+{% endif %}
+<script src="{% static 'catalog/js/products_layout.js' %}?v=20260711d" nonce="{{ request.csp_nonce }}" defer></script>

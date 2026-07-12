@@ -5,7 +5,8 @@ The choice lives in the user's DjangoLux profile preferences
 reserved app-namespace store the workspace dashboard uses — so every user
 picks their own product view. It is read server-side here to decide which
 template/table `ProductListView` renders, and written client-side via the
-global `window.updateAppPreference` helper (options card + inline toggle).
+staff-prefixed app-preference URL exposed by Django URL reversing (options card
++ inline toggle).
 """
 
 PRODUCTS_LAYOUT_NS = "switch_pos.products_layout"

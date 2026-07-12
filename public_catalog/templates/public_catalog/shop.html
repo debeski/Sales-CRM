@@ -1,0 +1,51 @@
+{% extends "public_catalog/public_base.html" %}
+
+{% block public_title %}Shop{% endblock %}
+
+{% block public_content %}
+<section class="public-page-head">
+    <div>
+        <p class="public-kicker">Catalog</p>
+        <h1>{{ public_config.shop_title }}</h1>
+        <p>{{ public_config.shop_subtitle }}</p>
+    </div>
+    <div class="public-page-metrics" aria-label="Catalog summary">
+        <span><strong>{{ listing_counts.total }}</strong> public items</span>
+        <span><strong>{{ listing_counts.products }}</strong> products</span>
+        <span><strong>{{ listing_counts.services }}</strong> services</span>
+    </div>
+    <form class="public-search" method="get">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input class="form-control" type="search" name="q" value="{{ q }}" placeholder="Search products and services">
+            <select class="form-select" name="kind">
+                <option value="">All</option>
+                <option value="products"{% if kind == "products" %} selected{% endif %}>Products</option>
+                <option value="services"{% if kind == "services" %} selected{% endif %}>Services</option>
+            </select>
+            <button class="btn btn-primary" type="submit">Search</button>
+        </div>
+    </form>
+</section>
+
+<section class="public-section">
+    <div class="public-section__head public-section__head--compact">
+        <div>
+            <p class="public-kicker">Showing</p>
+            <h2>{{ filtered_count }} item{% if filtered_count != 1 %}s{% endif %}</h2>
+        </div>
+    </div>
+    {% if listings %}
+    <div class="public-card-grid">
+        {% for listing in listings %}
+            {% include "public_catalog/_listing_card.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="public-empty">
+        <i class="bi bi-shop"></i>
+        <p>No matching public items yet.</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

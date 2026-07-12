@@ -10,7 +10,7 @@ only their own records but a manager the whole store. See
 1. **Model-level (Django/dlux)** — *can this user touch invoices at all?* Enforced
    by `PermissionRequiredMixin` on every view (`raise_exception=True` → 403). Also
    drives the auto-discovered sidebar: no `view_delivery` → no "Deliveries" entry.
-   The project-wide `/workspace/` dashboard is discoverable when the user has at
+   The project-wide `/staff/workspace/` dashboard is discoverable when the user has at
    least one permission that can produce a workspace tile or quick action.
 2. **Row-level (this project)** — *which invoices?* Each owned model declares an
    `OWNER_FIELDS` tuple and gains a `view_all_<model>` permission. A user sees a
@@ -29,7 +29,7 @@ only their own records but a manager the whole store. See
 | `finance.StaffAccount` | `user` | `finance.view_all_staffaccount` |
 | `finance.StaffLedgerEntry` | `account.user`, `created_by` | `finance.view_all_staffledgerentry` |
 
-Payment receipt printing (`/sales/payments/<id>/receipt/`) uses the same
+Payment receipt printing (`/staff/sales/payments/<id>/receipt/`) uses the same
 `sales.view_payment` permission and `Payment` ownership row filter as the
 payments list.
 

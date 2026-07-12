@@ -1,6 +1,7 @@
 <div class="btn-group btn-group-sm" role="group"
      data-products-layout-switch
      data-products-layout-ns="{{ products_layout_ns }}"
+     data-app-pref-url-template="{% url 'update_app_preference' '__namespace__' %}"
      aria-label="{{ DLUX_STRINGS.options_products_layout|default:'Products layout' }}">
     <button type="button"
             class="btn {% if products_layout == 'table' %}btn-primary{% else %}btn-outline-secondary{% endif %}"

@@ -1,0 +1,52 @@
+<article class="public-card public-card--{{ listing.source_kind }}">
+    <a class="public-card__media" href="{{ listing.get_absolute_url }}">
+        {% if listing.image_url %}
+        <img src="{{ listing.image_url }}" alt="{{ listing.display_title }}">
+        {% else %}
+        <span><i class="bi {% if listing.source_kind == 'service' %}bi-tools{% else %}bi-box-seam{% endif %}"></i></span>
+        {% endif %}
+        {% if public_config.show_availability and listing.show_availability %}
+        <em class="public-card__status public-availability--{{ listing.availability_code }}">
+            {{ listing.availability_label }}
+        </em>
+        {% endif %}
+    </a>
+    <div class="public-card__body">
+        <div class="public-card__meta">
+            <span>{{ listing.source_label }}</span>
+            <span>{{ listing.source_kind }}</span>
+        </div>
+        <h3><a href="{{ listing.get_absolute_url }}">{{ listing.display_title }}</a></h3>
+        {% if listing.display_summary %}<p>{{ listing.display_summary|truncatechars:130 }}</p>{% endif %}
+        <div class="public-card__facts">
+            {% if public_config.show_price and listing.show_price %}
+                {% if listing.price_lyd %}
+                <span class="public-price"><i class="bi bi-cash-coin"></i>{{ listing.price_lyd|floatformat:2 }} LYD</span>
+                {% else %}
+                <span class="public-muted"><i class="bi bi-chat-dots"></i>Contact for price</span>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% if listing.public_variants %}
+        <div class="public-swatches" aria-label="Available options">
+            {% for variant in listing.public_variants|slice:":6" %}
+            <span title="{{ variant.label }}">
+                {% if variant.color %}
+                <i style="background:{{ variant.color_hex }}"></i>
+                {% endif %}
+                {{ variant.size|default:variant.color_label }}
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="public-card__actions">
+        <a class="btn btn-sm btn-link public-card__link" href="{{ listing.get_absolute_url }}">View page</a>
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary"
+                data-dynamic-modal="{% url 'public_catalog:item_modal' listing.slug %}"
+                data-modal-title="{{ listing.display_title }}">
+            <i class="bi bi-arrows-angle-expand me-1"></i>Quick view
+        </button>
+    </div>
+</article>

@@ -151,6 +151,7 @@ DLUX_STRINGS = {
         "choice_unknown": "Any",
         # ---- list page titles + subtitles ----
         "app_workspace": "Workspace",
+        "workspace_dashboard": "Workspace",
         "common_workspace_dashboard": "Workspace",
         "page_products": "Products & Stock",
         "page_products_sub": "LYD prices are computed live from the current exchange rate.",
@@ -435,6 +436,7 @@ DLUX_STRINGS = {
         "choice_unknown": "الكل",
         # ---- list page titles + subtitles ----
         "app_workspace": "مساحة العمل",
+        "workspace_dashboard": "مساحة العمل",
         "common_workspace_dashboard": "مساحة العمل",
         "page_products": "الأصناف والمخزون",
         "page_products_sub": "أسعار الدينار تُحتسب مباشرة من سعر الصرف الحالي.",

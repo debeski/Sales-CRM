@@ -14,11 +14,11 @@ x-environment:
   # Backup settings
   BACKUP_INTERVAL: "${BACKUP_INTERVAL:-680400}"
   # Web app settings (override these in compose.dev.yml or .env)
-  # The ERP is served on the erp.<domain> subdomain (Caddy routes by hostname);
-  # the apex/www hosts are the static portfolio and never reach Django.
-  ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,localhost,127.0.0.1,erp.switchlibya.ly,caddy}"
-  ALLOWED_URLS: "${ALLOWED_URLS:-https://erp.switchlibya.ly}"
-  BASE_URL: "${BASE_URL:-https://erp.switchlibya.ly}"
+  # Django/DLux owns the public/staff path split on the canonical host.
+  # The legacy erp.<domain> host may redirect to /staff/ at Caddy.
+  ALLOWED_HOSTS: "${ALLOWED_HOSTS:-web,localhost,127.0.0.1,switchlibya.ly,www.switchlibya.ly,erp.switchlibya.ly,caddy}"
+  ALLOWED_URLS: "${ALLOWED_URLS:-https://switchlibya.ly,https://www.switchlibya.ly}"
+  BASE_URL: "${BASE_URL:-https://switchlibya.ly}"
   DEBUG_STATUS: "${DEBUG_STATUS:-False}"
   # DjangoLux verified inline updater (generated Compose deployments only)
   DLUX_INLINE_UPDATES_ENABLED: "True"
@@ -132,12 +132,12 @@ services:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
     environment:
-      # ERP (Django) hostname — Caddy auto-provisions its Let's Encrypt cert.
-      # NOTE: replaces the old single NGINX_SERVER_NAME var. e.g. erp.switchlibya.ly
-      CADDY_ERP_ADDRESS: "${CADDY_ERP_ADDRESS:-localhost}"
-      # Public portfolio host(s), space-separated (apex + www), served statically.
+      # Canonical Django/DLux host(s), space-separated; Caddy auto-provisions certs.
       # e.g. "switchlibya.ly www.switchlibya.ly"
-      CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-http://portfolio.localhost}"
+      CADDY_SITE_ADDRESS: "${CADDY_SITE_ADDRESS:-switchlibya.ly www.switchlibya.ly}"
+      # Optional legacy ERP hostname redirected to CADDY_PRIMARY_URL/staff/.
+      CADDY_ERP_ADDRESS: "${CADDY_ERP_ADDRESS:-erp.switchlibya.ly}"
+      CADDY_PRIMARY_URL: "${CADDY_PRIMARY_URL:-https://switchlibya.ly}"
       # Max upload size (Caddy units, e.g. 10MB).
       CADDY_MAX_SIZE: "${CADDY_MAX_SIZE:-10MB}"
     volumes:
@@ -148,7 +148,6 @@ services:
       - ./media/:/app/media:ro
       - dlux_runtime:/opt/dlux-runtime:ro
       - ./.nginx/maintenance.html:/usr/share/caddy/maintenance/maintenance.html:ro
-      - ./portfolio:/srv/portfolio:ro   # static public landing (apex + www)
     depends_on:
       web:
         condition: service_healthy

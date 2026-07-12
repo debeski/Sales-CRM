@@ -74,7 +74,7 @@ Every recorded `Payment` has its own durable receipt number
 (`Payment.receipt_number`, generated as `RCT-000001` style and backfilled for
 existing payments by migration `sales/0005`). Staff can print the receipt from
 the row context menu in the invoice's payments table or the standalone payments
-list at `/sales/payments/<id>/receipt/`; receipt print actions open in a new tab.
+list at `/staff/sales/payments/<id>/receipt/`; receipt print actions open in a new tab.
 
 The receipt uses the same official logo from DjangoLux System Settings as the
 printed invoice. It shows the customer/invoice, amount collected, method,
@@ -89,6 +89,30 @@ Products and Services carry an optional photo (`image`). It's shown as a thumbna
 in the catalog lists and enlarged in the item's detail card. On a phone the upload
 field offers the camera or the gallery. Purely descriptive — it never affects
 pricing, stock or invoices.
+
+## Public catalog
+
+The public catalog is a curated read-only projection of internal catalog records.
+`public_catalog.PublicCatalogListing` links exactly one active Product or one active
+Service to a public slug, title, summary/body, optional public image override,
+installation notes, warranty notes, and publish flags.
+
+Public pages (`/`, `/shop/`, `/shop/items/<slug>/`, and the item modal endpoint)
+may show public title/copy, customer-facing image, LYD selling price, broad
+availability labels (`Available`, `Limited availability`, `Available to order`,
+`By appointment`, `Currently unavailable`), and color/size option labels. They
+render through the public storefront templates and dynamic quick-view modal. They
+must not show SKU, barcode, import cost, markup, exact product/variant stock
+counts, staff modal URLs, or internal staff chrome.
+
+The public contact modal (`/contact/modal/`) is allowed to write
+`PublicContactMessage` rows. Each browser attempt carries a stable idempotency
+key, enforced by a database unique constraint, so retries create one message and
+send at most one email. The saved message remains the source of truth even if the
+SMTP side effect fails; staff can inspect `email_status` and `email_error` in
+admin. Future reservation, purchase, checkout, and payment capture paths must
+follow the same rule: database-backed idempotency first, Celery/Redis only for
+retryable side effects, races, or throttling support.
 
 ## Product variant attributes
 
@@ -124,7 +148,7 @@ old documents.
 
 ## Workspace dashboard
 
-The project-wide landing page is `/workspace/`. It is not a separate accounting
+The staff landing page is `/staff/workspace/`. It is not a separate accounting
 source; it is a live operating surface over the same domain records. Tiles are
 created server-side only when the user has the matching permission, and the
 queries use the same dlux scope filtering plus project row ownership as the list
@@ -137,8 +161,8 @@ per user in DjangoLux's reserved app-preferences namespace:
 `Profile.preferences["app"]["switch_pos.workspace_dashboard.v1"]`. Browser
 `localStorage` is kept only as a fallback and one-time migration source for older
 layouts. Layout preferences do not grant access to hidden data, change business
-records, or affect another user's layout. The older `/sales/dashboard/` page
-remains available as **Sales Overview** for a sales-centric screen.
+records, or affect another user's layout. The older `/staff/sales/dashboard/`
+page remains available as **Sales Overview** for a sales-centric screen.
 
 ## Opening stock (one-time bulk intake / رصيد افتتاحي)
 
@@ -151,7 +175,7 @@ simply not re-entered; real invoices start drawing down stock from launch on.
 This is **not a document of its own** — it's a *child of the stock ledger*: a
 one-time bulk way to post Stock In movements. A **trigger button on the Stock
 Movements page** (gated by `add_product` + `add_stockmovement`) opens a full-page
-grid (`/catalog/stock-movements/opening-stock/`) where an admin enters many items
+grid (`/staff/catalog/stock-movements/opening-stock/`) where an admin enters many items
 at once, one per row:
 
 1. Each row is either a **new** item (type a name) or an **existing** one (pick
@@ -175,7 +199,7 @@ at once, one per row:
    are dropped.
 3. It can only be applied once. After `reference="OPENING"` movements exist, the
    Stock Movements page switches the action to a read-only Opening Stock record
-   at `/catalog/stock-movements/opening-stock/view/`; the posted movements remain
+   at `/staff/catalog/stock-movements/opening-stock/view/`; the posted movements remain
    the authoritative audit trail.
 
 ## Purchase invoices / inbound stock invoices
@@ -246,7 +270,7 @@ by `view_inventory_valuation`.
 ## Fiscal year & the financial report
 
 A **fiscal year** here is the calendar year (Jan 1 – Dec 31), which is the norm
-in Libya. The **financial report** (`/sales/financial/`, gated by
+in Libya. The **financial report** (`/staff/sales/financial/`, gated by
 `view_financial_report`) is a whole-store owner P&L for a chosen year — it is
 never per-rep. It reports:
 

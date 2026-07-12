@@ -65,8 +65,9 @@ class WorkspaceDashboardTests(TestCase):
         self.assertIn("data-dashboard-grid", html)
         self.assertIn("data-dashboard-customize", html)
         self.assertIn("common/css/workspace_dashboard.css?v=20260710d", html)
-        self.assertIn("common/js/workspace_dashboard.js", html)
+        self.assertIn("common/js/workspace_dashboard.js?v=20260711b", html)
         self.assertIn(WORKSPACE_PREF_NAMESPACE, html)
+        self.assertIn('data-app-pref-url-template="/staff/sys/api/preferences/app/__namespace__/"', html)
         self.assertIn('data-widget-id="quick_actions"', html)
         self.assertIn('data-widget-id="purchase_month"', html)
 
@@ -139,6 +140,18 @@ class WorkspaceDashboardTests(TestCase):
         self.assertEqual(set(COMMON_STRINGS["en"]), set(COMMON_STRINGS["ar"]))
         self.assertEqual(set(SALES_STRINGS["en"]), set(SALES_STRINGS["ar"]))
 
+    def test_workspace_sidebar_label_is_translated(self):
+        from dlux.discovery import _discover_sidebar_catalog_uncached
+
+        en_catalog = _discover_sidebar_catalog_uncached(lang_code="en", config={})
+        ar_catalog = _discover_sidebar_catalog_uncached(lang_code="ar", config={})
+
+        en_entry = next(entry for entry in en_catalog if entry["id"] == "common:workspace_dashboard")
+        ar_entry = next(entry for entry in ar_catalog if entry["id"] == "common:workspace_dashboard")
+
+        self.assertEqual(en_entry["label"], "Workspace")
+        self.assertEqual(ar_entry["label"], "مساحة العمل")
+
     def test_workspace_layout_uses_dlux_app_preference_namespace(self):
         from django.urls import NoReverseMatch
         from dlux.models import SystemSettings
@@ -182,3 +195,11 @@ class WorkspaceDashboardTests(TestCase):
         self.assertIn(":root.theme-aether .action-chip", css)
         self.assertIn("--ws-green-rgb: 74, 222, 128;", css)
         self.assertIn("--tile-accent-rgb: var(--ws-green-rgb);", css)
+
+    def test_workspace_js_uses_reversed_app_preference_url(self):
+        js_path = Path(__file__).resolve().parents[1] / "static" / "common" / "js" / "workspace_dashboard.js"
+        js = js_path.read_text(encoding="utf-8")
+
+        self.assertIn("appPrefUrlTemplate", js)
+        self.assertIn("fetch(url", js)
+        self.assertLess(js.index("const url = appPrefUrl();"), js.index("window.updateAppPreference"))

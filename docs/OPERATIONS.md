@@ -22,34 +22,36 @@ obtains and renews Let's Encrypt certificates automatically on boot — there is
 no certbot step, no bootstrap command, and no manual reload. A plain
 `./start.sh` is the entire TLS workflow.
 
-Caddy serves **two independent sites, routed by hostname** (this is an edge
-concern, not a Django one — Django never sees the apex/www requests):
+Caddy serves the canonical public/staff Django app and can redirect the old ERP
+hostname. It does **not** split `/shop/` vs `/staff/`; Django URLconf and DLux
+public-root/auth settings own that split.
 
 | Hostname(s)                              | Served by            | Env var             |
 |------------------------------------------|----------------------|---------------------|
-| `erp.switchlibya.ly`                     | the Django ERP (proxy to `web:8000`) | `CADDY_ERP_ADDRESS` |
-| `switchlibya.ly` `www.switchlibya.ly`    | static portfolio (`./portfolio`, mounted read-only at `/srv/portfolio`) | `CADDY_SITE_ADDRESS` |
+| `switchlibya.ly` `www.switchlibya.ly`    | Django/DLux app (`/`, `/shop/`, `/staff/...`) | `CADDY_SITE_ADDRESS` |
+| `erp.switchlibya.ly`                     | permanent redirect to `CADDY_PRIMARY_URL/staff/` | `CADDY_ERP_ADDRESS` |
 
-Each hostname gets its **own** auto-provisioned Let's Encrypt cert. The ERP stays
-entirely on the `erp.` subdomain; `CSRF_COOKIE_DOMAIN`/`SESSION_COOKIE_DOMAIN`
-follow `BASE_URL`'s hostname, so ERP cookies are scoped to `erp.switchlibya.ly`.
+Each hostname gets its **own** auto-provisioned Let's Encrypt cert. Session and
+CSRF cookies follow `BASE_URL`; with `BASE_URL=https://switchlibya.ly`, staff and
+public paths share the canonical domain.
 
 1. Point **A/AAAA records** at the VPS public IP for **all three** names:
-   `erp` (the ERP), `@`/apex, and `www` (the portfolio). Open **inbound TCP 80
-   and 443** on the host firewall — Caddy needs both for the ACME challenge and
-   to serve traffic. (A name that doesn't resolve yet just fails its own cert and
-   retries; it does not affect the other site.)
+   `@`/apex, `www`, and optionally `erp` for legacy bookmarks. Open **inbound TCP
+   80 and 443** on the host firewall — Caddy needs both for the ACME challenge
+   and to serve traffic. (A name that doesn't resolve yet just fails its own cert
+   and retries; it does not affect the other site.)
 2. In `.secrets/.env` set:
    ```ini
-   CADDY_ERP_ADDRESS=erp.switchlibya.ly                    # the ERP subdomain
-   CADDY_SITE_ADDRESS=switchlibya.ly www.switchlibya.ly    # portfolio host(s)
-   ALLOWED_HOSTS=erp.switchlibya.ly,web,localhost,127.0.0.1
-   ALLOWED_URLS=https://erp.switchlibya.ly
-   BASE_URL=https://erp.switchlibya.ly
+   CADDY_SITE_ADDRESS=switchlibya.ly www.switchlibya.ly
+   CADDY_ERP_ADDRESS=erp.switchlibya.ly
+   CADDY_PRIMARY_URL=https://switchlibya.ly
+   ALLOWED_HOSTS=switchlibya.ly,www.switchlibya.ly,erp.switchlibya.ly,web,localhost,127.0.0.1,caddy
+   ALLOWED_URLS=https://switchlibya.ly,https://www.switchlibya.ly
+   BASE_URL=https://switchlibya.ly
    ```
-   > **Migrating from a single-domain deploy:** the ERP host variable changed
-   > from `NGINX_SERVER_NAME` to **`CADDY_ERP_ADDRESS`**. Update your `.env` or
-   > the ERP block falls back to `localhost` and won't get its cert.
+   > **Migrating from the older split:** the static `./portfolio` host is no
+   > longer the public site. Apex/www now proxy to Django; `erp.switchlibya.ly`
+   > is only a redirect to `/staff/`.
 
    No ACME email is required — Caddy issues and auto-renews certs without one. To
    receive Let's Encrypt expiry notices, add a real address to the `Caddyfile`
@@ -62,11 +64,8 @@ follow `BASE_URL`'s hostname, so ERP cookies are scoped to `erp.switchlibya.ly`.
    caddy`); each site is live on HTTPS with HTTP→HTTPS redirect. Certs persist in
    the `caddy_data` volume and auto-renew.
 
-Edit the public landing at **`./portfolio/index.html`** (a self-contained static
-page — no rebuild needed; `docker compose restart caddy` picks up changes, or
-they serve immediately since the dir is mounted). Override the published ports
-with `HTTP_PORT` / `HTTPS_PORT` (default `80`/`443`) and the upload cap with
-`CADDY_MAX_SIZE` (default `10MB`) if needed.
+Override the published ports with `HTTP_PORT` / `HTTPS_PORT` (default `80`/`443`)
+and the upload cap with `CADDY_MAX_SIZE` (default `10MB`) if needed.
 
 Then migrate, seed roles, and create the owner:
 
@@ -104,11 +103,22 @@ language, theme). Health endpoint: `/health/`.
      creates/reuses products, can set product color and size/spec at intake,
      accepts the supplier invoice scan/photo/PDF, and posts Stock In movements
      per line.
-4. Create staff users and add them to one seeded role (`seed_roles` creates Sales
+4. Build the storefront from **Shop Builder** (`/staff/shop-builder/`): flip the
+   **Publish** switch on any live Product/Service to add it to the public shop,
+   **Feature** the best (drives the landing hero/strip, drag the grip to reorder),
+   and **Customize** each listing (customer-safe public title/summary/body,
+   optional image override, installation/warranty notes, and per-listing show
+   price/availability). The **Storefront live** switch and **Shop settings** (title,
+   subtitle, contacts, `featured_limit`) drive the `switch_pos.public_catalog`
+   system settings; turning the storefront off serves a coming-soon page (HTTP 503).
+   Public pages show availability bands, not exact stock counts. The full-screen
+   contact modal posts to `/contact/modal/`, saves a `PublicContactMessage` with an
+   idempotency key, and emails the configured contact recipient when SMTP is valid.
+5. Create staff users and add them to one seeded role (`seed_roles` creates Sales
    Manager, Sales Representative, and Delivery Courier). For delivery people,
    technicians, or anyone carrying advances/loans/service payouts, create a
    **Finance → Staff Accounts** row so their ledger and confirmations have a home.
-5. **Sales → New Invoice**: type or pick a customer in the single search box —
+6. **Sales → New Invoice**: type or pick a customer in the single search box —
    existing customers autofill phone/address, and a new name is saved as a
    customer for next time. Add product / service lines (prices auto-fill); product
    lines expose available color swatches and size/spec choices from live variant
@@ -121,22 +131,29 @@ language, theme). Health endpoint: `/health/`.
 
 | Path | Page |
 |------|------|
-| `/workspace/` | Workspace dashboard (recommended Home URL in System Settings) |
-| `/sales/dashboard/` | Sales Overview (sales-focused legacy dashboard) |
-| `/sales/` | Invoices |
-| `/sales/new/` | New invoice editor |
-| `/catalog/` | Products & stock |
-| `/catalog/services/` | Services |
-| `/catalog/suppliers/` | Supplier list |
-| `/catalog/purchase-invoices/` | Purchase invoices / inbound stock invoices |
-| `/catalog/stock-movements/` | Stock ledger (+ Opening Stock / Add Stock buttons) |
-| `/finance/rates/` | Exchange rates |
-| `/finance/deposits/` | Cash deposits |
-| `/finance/expenses/` | Operating expenses |
-| `/finance/staff-accounts/` | Staff accounts / user credit |
-| `/finance/staff-ledger/` | Staff ledger entries |
-| `/sales/report/` | Sales report (XLSX export from here; owner-only) |
-| `/sales/financial/` | Fiscal-year financial report with expenses/net profit |
+| `/` | Public landing page |
+| `/shop/` | Public catalog |
+| `/shop/items/<slug>/` | Public item page |
+| `/contact/modal/` | Public contact dynamic modal endpoint |
+| `/staff/` | Staff entry redirect |
+| `/staff/accounts/login/` | Staff login |
+| `/staff/workspace/` | Workspace dashboard (DLux Home URL) |
+| `/staff/sales/dashboard/` | Sales Overview |
+| `/staff/sales/invoices/` | Invoices |
+| `/staff/sales/new/` | New invoice editor |
+| `/staff/catalog/` | Products & stock |
+| `/staff/shop-builder/` | Public Catalog Builder (curate the public shop) |
+| `/staff/catalog/services/` | Services |
+| `/staff/catalog/suppliers/` | Supplier list |
+| `/staff/catalog/purchase-invoices/` | Purchase invoices / inbound stock invoices |
+| `/staff/catalog/stock-movements/` | Stock ledger (+ Opening Stock / Add Stock buttons) |
+| `/staff/finance/rates/` | Exchange rates |
+| `/staff/finance/deposits/` | Cash deposits |
+| `/staff/finance/expenses/` | Operating expenses |
+| `/staff/finance/staff-accounts/` | Staff accounts / user credit |
+| `/staff/finance/staff-ledger/` | Staff ledger entries |
+| `/staff/sales/report/` | Sales report (XLSX export from here; owner-only) |
+| `/staff/sales/financial/` | Fiscal-year financial report with expenses/net profit |
 
 ## Scheduled tasks (Celery Beat)
 
@@ -211,9 +228,10 @@ Required repository **Secrets**: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (token 
 be a *Secret*, not a *Variable*). Deploy the published image with
 `WEB_IMAGE=debeski/sales:latest ./start.sh -d`.
 
-Set **System Settings → Home URL** to `/workspace/` to make the project-wide
-Workspace dashboard the landing page. Keep `/sales/dashboard/` for the
-sales-only overview when a sales-centric screen is useful.
+Set **System Settings → Home URL** to `/staff/workspace/` to make the
+project-wide Workspace dashboard the staff landing page. Keep
+`/staff/sales/dashboard/` for the sales-only overview when a sales-centric screen
+is useful.
 
 ## Local development without Postgres/Redis
 

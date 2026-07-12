@@ -11,6 +11,7 @@
         if (!grid) return;
         const storageKey = root.dataset.storageKey || 'switch.workspace.dashboard.v1';
         const appPrefNamespace = root.dataset.appPrefNamespace || 'switch_pos.workspace_dashboard.v1';
+        const appPrefUrlTemplate = root.dataset.appPrefUrlTemplate || '';
         const sizeOrder = ['s', 'm', 'l', 'xl'];
         const originalOrder = Array.from(grid.querySelectorAll('[data-widget-id]')).map((tile) => tile.dataset.widgetId);
 
@@ -42,6 +43,13 @@
             return meta ? meta.getAttribute('content') : '';
         }
 
+        function appPrefUrl() {
+            if (appPrefUrlTemplate && appPrefUrlTemplate.includes('__namespace__')) {
+                return appPrefUrlTemplate.replace('__namespace__', encodeURIComponent(appPrefNamespace));
+            }
+            return '';
+        }
+
         function syncAppPrefCache(value) {
             if (!window.USER_PREFS) return;
             if (!window.USER_PREFS.app || typeof window.USER_PREFS.app !== 'object') {
@@ -52,19 +60,21 @@
         }
 
         function persistAppState(state) {
-            if (typeof window.updateAppPreference === 'function') {
-                window.updateAppPreference(appPrefNamespace, state).catch(function () {});
+            const token = csrfToken();
+            const url = appPrefUrl();
+            if (url && token) {
+                fetch(url, {
+                    method: 'POST',
+                    headers: {'X-CSRFToken': token, 'Content-Type': 'application/json'},
+                    body: JSON.stringify(state === undefined ? null : state),
+                }).then(function (response) {
+                    if (response.ok) syncAppPrefCache(state);
+                }).catch(function () {});
                 return;
             }
-            const token = csrfToken();
-            if (!token) return;
-            fetch('/sys/api/preferences/app/' + encodeURIComponent(appPrefNamespace) + '/', {
-                method: 'POST',
-                headers: {'X-CSRFToken': token, 'Content-Type': 'application/json'},
-                body: JSON.stringify(state === undefined ? null : state),
-            }).then(function (response) {
-                if (response.ok) syncAppPrefCache(state);
-            }).catch(function () {});
+            if (typeof window.updateAppPreference === 'function') {
+                window.updateAppPreference(appPrefNamespace, state).catch(function () {});
+            }
         }
 
         function loadState() {

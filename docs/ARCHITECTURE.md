@@ -1,9 +1,10 @@
 # Switch POS — Architecture
 
 A web-based sales system (منظومة مبيعات) for **Switch**, built on **DjangoLux (dlux 1.4.4)**.
-It is an internal, single-branch system (not a public online store). DjangoLux already
-provides users, permissions, sidebar/titlebar/navbar UI, dynamic modals, audit trail,
-soft-delete, reports, backups and notifications — this project adds only the sales domain.
+It is a single Django/DLux project with a public catalog surface and an authenticated
+staff workflow. DjangoLux provides users, permissions, sidebar/titlebar/navbar UI,
+dynamic modals, audit trail, soft-delete, reports, backups and notifications — this
+project adds the Switch sales/catalog/finance domain plus the public catalog projection.
 
 ## Apps & dependency layering
 
@@ -13,6 +14,8 @@ finance   (money foundation: exchange rate, cash deposits, expenses, staff accou
 catalog   (products, services, stock ledger) — uses finance for conversion
    ▲
 sales     (customers, invoices, items, payments) — uses catalog + finance
+
+public_catalog (curated public listings linked to catalog Product/Service)
 ```
 
 Lower layers **never** import higher ones. The stock ledger references invoices by
@@ -21,6 +24,58 @@ their string number (not a FK) so `catalog` stays independent of `sales`.
 `common/` is a plain Python package (not a Django app, no models). It holds
 `ScopedListView` and the generic `templates/common/scoped_list.html` so every
 simple list page stays a few lines.
+
+## Public/staff URL split
+
+The split is owned by Django URLconf and DLux settings, not by Caddy path routing.
+Caddy proxies `switchlibya.ly`/`www.switchlibya.ly` to Django; the optional legacy
+`erp.switchlibya.ly` host redirects to `https://switchlibya.ly/staff/`.
+
+- Public routes: `/`, `/shop/`, `/shop/items/<slug>/`,
+  `/shop/items/<slug>/modal/`, and `/contact/modal/`.
+- Staff routes: `/staff/`, `/staff/accounts/...`, `/staff/sys/...`,
+  `/staff/workspace/`, `/staff/catalog/`, `/staff/sales/`, `/staff/finance/`,
+  `/staff/shop-builder/`, `/staff/app-modals/...`, and `/staff/admin/`.
+- `dlux.urls` is mounted below `/staff/`, so `reverse("login")` resolves to
+  `/staff/accounts/login/`; staff-only views still use normal Django auth
+  (`LoginRequiredMixin`, permissions, and `LOGIN_URL = "login"`).
+- DLux `SystemSettings.home_url` is `/staff/workspace/`, while public-root settings
+  are enabled with public root URL `/`; logout lands on `/`.
+
+`public_catalog.PublicCatalogListing` links exactly one internal `Product` or
+`Service` to a public slug and public copy. Public pages read from those linked
+records for safe price/availability display, but they do not expose SKU, barcode,
+cost, markup, exact stock counts, internal modal URLs, or staff navigation chrome.
+The public item modal returns the standard DLux dynamic-modal JSON shape
+(`{"html": ...}`) without rendering the full internal DLux base/config payload.
+The storefront UI is project-owned (`public_catalog/templates/public_catalog/*`
+and `public_catalog/css/public_catalog.css`): it reuses Bootstrap/DLux variables
+for theme fit, but does not extend the staff shell or emit staff navigation.
+The landing, shop, contact modal, and `/staff/` entry callbacks set
+`sidebar_exclude=True` so DLux sidebar discovery does not offer public pages or
+the staff redirect as internal navigation items.
+
+Staff curate the storefront from `/staff/shop-builder/` (`public_catalog.staff_views`,
+mounted via `public_catalog.staff_urls`), not Django admin. The builder lists every
+active `Product`/`Service` — backed by its real `PublicCatalogListing` or an unsaved
+transient one — and its `POST`-only AJAX endpoints (`toggle-publish`, `update-listing`,
+`reorder`, `settings`, gated by `public_catalog.change_publiccataloglisting`) create/
+update listings, reorder featured items, and flip global storefront settings. Those
+write endpoints never mutate on GET: passive probes return 204 and direct browser
+navigation redirects back to `/staff/shop-builder/`. They are marked
+`sidebar_exclude=True` so only `public_catalog_staff:builder` is discoverable for
+sidebar navigation. Global config lives in the DLux app-settings namespace
+`switch_pos.public_catalog`
+(`storefront_enabled`, `featured_limit`, shop title/subtitle, contact fields, default
+show-price/availability); when `storefront_enabled` is off the public views return a
+`coming_soon.html` page with HTTP 503.
+
+`PublicContactMessage` is the first public write path. Contact form posts carry a
+stable hidden idempotency key enforced by a database unique constraint; repeated
+submits with the same key return success without creating a second row or sending
+a second email. Email delivery uses the public catalog contact recipient when
+configured, falling back to Django's default sender address, and records
+`received`/`sent`/`failed`/`skipped` status on the saved row.
 
 ## How a screen is built (the dlux pattern)
 
@@ -72,9 +127,10 @@ The Products page renders three ways. The effective layout resolves
 
 Per-user switching has two surfaces sharing one component
 (`catalog/_products_layout_toggle.html`) and one script
-(`catalog/js/products_layout.js`, persists via the global
-`window.updateAppPreference` then reloads): an inline header toggle and a
-`/sys/options` card registered with `dlux.options.register_card`
+(`catalog/js/products_layout.js`, persists through the reversed
+`update_app_preference` URL, e.g. `/staff/sys/api/preferences/app/<namespace>/`,
+then reloads only after a successful save): an inline header toggle and a
+`/staff/sys/options` card registered with `dlux.options.register_card`
 (`catalog/dlux_options.py`, gated on `catalog.view_product`). The global default
 is the superuser settings tile above (`register_app_settings`). The shared
 `templates/common/scoped_list.html` exposes a `{% block list_body %}` so alternate

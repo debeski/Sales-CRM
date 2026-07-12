@@ -1,0 +1,71 @@
+{% load static %}
+<div class="scb-modal" data-customize-modal hidden>
+    <div class="scb-modal__backdrop" data-modal-close></div>
+    <div class="scb-modal__panel dlux-table-shell" role="dialog" aria-modal="true" aria-labelledby="scbModalTitle">
+        <header class="scb-modal__head">
+            <h2 id="scbModalTitle"><i class="bi bi-pencil-square me-2"></i>{{ DLUX_STRINGS.builder_customize_title|default:"Customize public listing" }}</h2>
+            <button type="button" class="scb-modal__x" data-modal-close aria-label="{{ DLUX_STRINGS.builder_cancel|default:'Cancel' }}"><i class="bi bi-x-lg"></i></button>
+        </header>
+
+        <form class="scb-modal__body" data-customize-form>
+            <div class="scb-field">
+                <label>{{ DLUX_STRINGS.builder_public_title|default:"Public title" }}</label>
+                <input type="text" name="public_title" maxlength="220" class="form-control glass-input" data-field="title">
+                <small>{{ DLUX_STRINGS.builder_public_title_hint|default:"Leave blank to use the internal name." }}</small>
+            </div>
+
+            <div class="scb-field">
+                <label>{{ DLUX_STRINGS.builder_public_summary|default:"Short summary" }}</label>
+                <input type="text" name="public_summary" maxlength="280" class="form-control glass-input" data-field="summary">
+            </div>
+
+            <div class="scb-field">
+                <label>{{ DLUX_STRINGS.builder_public_body|default:"Full description" }}</label>
+                <textarea name="public_body" rows="3" class="form-control glass-input" data-field="body"></textarea>
+            </div>
+
+            <div class="scb-field">
+                <label>{{ DLUX_STRINGS.builder_image_override|default:"Public image" }}</label>
+                <div class="scb-image">
+                    <span class="scb-image__preview" data-image-preview></span>
+                    <div class="scb-image__actions">
+                        <label class="btn btn-sm btn-outline-secondary rounded-pill mb-0">
+                            <i class="bi bi-camera me-1"></i><span>{{ DLUX_STRINGS.builder_image_override|default:"Public image" }}</span>
+                            <input type="file" name="image_override" accept="image/*" hidden data-image-input>
+                        </label>
+                        <button type="button" class="btn btn-sm btn-link text-danger" data-image-clear hidden><i class="bi bi-trash"></i></button>
+                    </div>
+                </div>
+                <small>{{ DLUX_STRINGS.builder_image_hint|default:"Optional — overrides the internal photo on the shop." }}</small>
+            </div>
+
+            <div class="scb-field scb-field--split">
+                <div>
+                    <label>{{ DLUX_STRINGS.builder_installation_notes|default:"Installation notes" }}</label>
+                    <textarea name="installation_notes" rows="2" class="form-control glass-input" data-field="installation"></textarea>
+                </div>
+                <div>
+                    <label>{{ DLUX_STRINGS.builder_warranty_notes|default:"Warranty notes" }}</label>
+                    <textarea name="warranty_notes" rows="2" class="form-control glass-input" data-field="warranty"></textarea>
+                </div>
+            </div>
+
+            <div class="scb-field scb-field--split">
+                <div>
+                    <label>{{ DLUX_STRINGS.builder_sort_order|default:"Sort order" }}</label>
+                    <input type="number" name="sort_order" min="0" max="9999" class="form-control glass-input" data-field="sort">
+                </div>
+                <div class="scb-checks">
+                    <label><input type="checkbox" name="show_price" data-field="show_price"> {{ DLUX_STRINGS.builder_show_price|default:"Show price" }}</label>
+                    <label><input type="checkbox" name="show_availability" data-field="show_availability"> {{ DLUX_STRINGS.builder_show_availability|default:"Show availability" }}</label>
+                    <label><input type="checkbox" name="show_when_unavailable" data-field="show_when_unavailable"> {{ DLUX_STRINGS.builder_show_when_unavailable|default:"Show even when unavailable" }}</label>
+                </div>
+            </div>
+
+            <footer class="scb-modal__foot">
+                <button type="button" class="btn btn-outline-secondary rounded-pill" data-modal-close>{{ DLUX_STRINGS.builder_cancel|default:"Cancel" }}</button>
+                <button type="submit" class="btn btn-primary rounded-pill" data-modal-save>{{ DLUX_STRINGS.builder_save|default:"Save" }}</button>
+            </footer>
+        </form>
+    </div>
+</div>

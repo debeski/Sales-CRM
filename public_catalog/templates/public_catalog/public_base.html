@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="{{ CURRENT_LANG|default:'en' }}" dir="{{ CURRENT_DIR|default:'ltr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% if public_config.shop_subtitle %}<meta name="description" content="{{ public_config.shop_subtitle }}">{% endif %}
+    <title>{% block public_title %}{{ public_config.shop_title|default:"Switch Shop" }}{% endblock %}</title>
+    {% if CURRENT_DIR == 'rtl' %}
+    <link rel="stylesheet" href="{% static 'bootstrap/bootstrap.rtl.min.css' %}">
+    {% else %}
+    <link rel="stylesheet" href="{% static 'bootstrap/bootstrap.min.css' %}">
+    {% endif %}
+    <link rel="stylesheet" href="{% static 'bootstrap/bootstrap-icons.css' %}">
+    <link rel="stylesheet" href="{% static 'dlux/main/css/main.css' %}">
+    <link rel="stylesheet" href="{% static 'dlux/main/css/buttons.css' %}">
+    <link rel="stylesheet" href="{% static 'public_catalog/css/public_catalog.css' %}?v=20260712b">
+    <link rel="icon" href="{{ APP_CONFIG.favicon_url|default:'/static/img/base_logo.svg' }}">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+<main class="public-shell">
+    <header class="public-nav">
+        <a class="public-brand" href="{% url 'public_catalog:landing' %}">
+            {% if APP_CONFIG.logo_url %}
+            <img src="{{ APP_CONFIG.logo_url }}" alt="{{ APP_CONFIG.identity.display_name|default:'Switch' }}">
+            {% else %}
+            <span class="public-brand__mark"><i class="bi bi-shield-lock"></i></span>
+            {% endif %}
+            <span class="public-brand__text">{{ APP_CONFIG.identity.display_name|default:"Switch" }}</span>
+        </a>
+        <nav aria-label="Public navigation">
+            <a href="{% url 'public_catalog:shop' %}">Shop</a>
+            <button type="button"
+                    data-dynamic-modal="{% url 'public_catalog:contact_modal' %}"
+                    data-modal-title="Contact Switch"
+                    data-public-modal-size="fullscreen">
+                Contact
+            </button>
+        </nav>
+    </header>
+    {% include 'dlux/includes/messages.html' %}
+    {% block public_content %}{% endblock %}
+    <footer class="public-footer">
+        <span>{{ APP_CONFIG.identity.display_name|default:"Switch" }}</span>
+        <span>Smart locks · access control · installation</span>
+    </footer>
+</main>
+
+<script src="{% static 'bootstrap/bootstrap.bundle.min.js' %}" nonce="{{ request.csp_nonce }}"></script>
+<div class="modal fade" id="universalDynamicModal" tabindex="-1" aria-labelledby="dynamicModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-xl-down">
+        <div class="modal-content glass-card public-modal">
+            <div class="modal-header border-0">
+                <h5 class="modal-title" id="dynamicModalTitle">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <span id="dynamicModalTitleText" class="fw-bold">Details</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="universalDynamicModalBody"></div>
+            <div class="modal-footer border-0 pt-0" id="universalDynamicModalFooter">
+                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="{% static 'dlux/helpers/dynamic_modal/js/main.js' %}" nonce="{{ request.csp_nonce }}" defer></script>
+<script src="{% static 'public_catalog/js/public_catalog.js' %}?v=20260712b" nonce="{{ request.csp_nonce }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

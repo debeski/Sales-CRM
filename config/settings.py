@@ -34,7 +34,10 @@ is_local = BASE_HOSTNAME in ["localhost", "127.0.0.1"] or ":" in (BASE_HOSTNAME 
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv("ALLOWED_HOSTS", "web,nginx,localhost,127.0.0.1").split(",")
+    for host in os.getenv(
+        "ALLOWED_HOSTS",
+        "web,nginx,caddy,localhost,127.0.0.1,switchlibya.ly,www.switchlibya.ly,erp.switchlibya.ly",
+    ).split(",")
     if host.strip()
 ]
 
@@ -73,6 +76,18 @@ SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # 1 week
 SESSION_COOKIE_NAME = 'switch_pos_sessionid'
 CSRF_COOKIE_NAME = 'switch_pos_csrftoken'
 CSRF_COOKIE_SAMESITE = "Lax"
+LOGIN_URL = "login"
+
+DLUX_CONFIG = {
+    "home_url": "/staff/workspace/",
+    "public_root": True,
+    "public_root_split_enabled": True,
+    "public_root_url": "/",
+    "public_root_title": "Switch Libya",
+    "public_root_meta_description": "Smart locks, access control, installation and after-sale services from Switch Libya.",
+    "show_titlebar_on_public": False,
+    "show_sidebar_on_public": False,
+}
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -93,6 +108,7 @@ INSTALLED_APPS = [
     "finance",
     "catalog",
     "sales",
+    "public_catalog",
     # DjangoLux generated apps end
 ]
 
@@ -163,7 +179,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-TIME_ZONE = os.getenv("TIME_ZONE", "UTC")
+TIME_ZONE = os.getenv("TIME_ZONE", "Africa/Tripoli")
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/2")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/3")

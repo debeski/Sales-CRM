@@ -1,0 +1,98 @@
+{% extends "dlux/base.html" %}
+{% load static %}
+
+{% block title %}{{ DLUX_STRINGS.builder_title|default:"Public Catalog Builder" }}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'public_catalog/css/shop_builder.css' %}?v=20260712a">
+{% endblock %}
+
+{% block content %}
+<div class="shop-builder"
+     data-shop-builder
+     data-can-edit="{% if can_edit %}1{% endif %}"
+     data-toggle-url="{% url 'public_catalog_staff:builder_toggle_publish' %}"
+     data-update-url="{% url 'public_catalog_staff:builder_update_listing' %}"
+     data-reorder-url="{% url 'public_catalog_staff:builder_reorder' %}"
+     data-settings-url="{% url 'public_catalog_staff:builder_settings' %}"
+     data-saved-msg="{{ DLUX_STRINGS.builder_saved|default:'Saved.' }}"
+     data-error-msg="{{ DLUX_STRINGS.builder_save_failed|default:'Could not save. Please try again.' }}"
+     data-txt-published="{{ DLUX_STRINGS.builder_published|default:'Published' }}"
+     data-txt-publish="{{ DLUX_STRINGS.builder_publish|default:'Publish' }}"
+     data-txt-live="{{ DLUX_STRINGS.builder_storefront_live|default:'Storefront is live' }}"
+     data-txt-offline="{{ DLUX_STRINGS.builder_storefront_offline|default:'Storefront is offline' }}">
+
+    <header class="shop-builder__head dlux-table-shell">
+        <div class="shop-builder__head-copy">
+            <h1><i class="bi bi-shop-window me-2"></i>{{ DLUX_STRINGS.builder_title|default:"Public Catalog Builder" }}</h1>
+            <p>{{ DLUX_STRINGS.builder_subtitle|default:"Curate your public shop from live stock — publish items, feature the best, and tune what customers see." }}</p>
+        </div>
+        <div class="shop-builder__head-actions">
+            <a class="btn btn-outline-secondary rounded-pill" href="{% url 'public_catalog:shop' %}" target="_blank" rel="noopener">
+                <i class="bi bi-box-arrow-up-right me-1"></i>{{ DLUX_STRINGS.builder_open_shop|default:"View live shop" }}
+            </a>
+            <button type="button" class="btn btn-primary rounded-pill"
+                    data-dynamic-modal="{% url 'dlux_app_settings_modal' public_settings_ns %}"
+                    data-modal-title="{{ DLUX_STRINGS.builder_settings|default:'Shop settings' }}">
+                <i class="bi bi-sliders me-1"></i>{{ DLUX_STRINGS.builder_settings|default:"Shop settings" }}
+            </button>
+        </div>
+    </header>
+
+    <section class="shop-builder__bar dlux-table-shell">
+        <label class="storefront-switch {% if not can_edit %}is-disabled{% endif %}">
+            <input type="checkbox" role="switch" data-storefront-toggle
+                   {% if public_config.storefront_enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+            <span class="storefront-switch__dot"></span>
+            <span class="storefront-switch__text">
+                <b data-storefront-label>{% if public_config.storefront_enabled %}{{ DLUX_STRINGS.builder_storefront_live|default:"Storefront is live" }}{% else %}{{ DLUX_STRINGS.builder_storefront_offline|default:"Storefront is offline" }}{% endif %}</b>
+                <small>{{ DLUX_STRINGS.builder_storefront_hint|default:"When offline, the public shop shows a coming-soon page." }}</small>
+            </span>
+        </label>
+        <div class="shop-builder__stats">
+            <div class="scb-stat"><b data-stat="published">{{ builder_counts.published }}</b><span>{{ DLUX_STRINGS.builder_stat_published|default:"Published" }}</span></div>
+            <div class="scb-stat"><b data-stat="featured">{{ builder_counts.featured }}</b><span>{{ DLUX_STRINGS.builder_stat_featured|default:"Featured" }}</span></div>
+            <div class="scb-stat"><b data-stat="available">{{ builder_counts.available }}</b><span>{{ DLUX_STRINGS.builder_stat_available|default:"Available now" }}</span></div>
+            <div class="scb-stat"><b>{{ builder_counts.total }}</b><span>{{ DLUX_STRINGS.builder_stat_total|default:"In stock" }}</span></div>
+        </div>
+    </section>
+
+    <div class="shop-builder__toolbar">
+        <div class="shop-builder__search">
+            <i class="bi bi-search"></i>
+            <input type="search" data-builder-search
+                   placeholder="{{ DLUX_STRINGS.builder_search_placeholder|default:'Search products and services…' }}"
+                   aria-label="{{ DLUX_STRINGS.builder_search_placeholder|default:'Search products and services…' }}">
+        </div>
+        <div class="shop-builder__filters" role="tablist">
+            <button type="button" class="scb-chip is-active" data-filter="all">{{ DLUX_STRINGS.builder_filter_all|default:"All" }}</button>
+            <button type="button" class="scb-chip" data-filter="products">{{ DLUX_STRINGS.builder_filter_products|default:"Products" }}</button>
+            <button type="button" class="scb-chip" data-filter="services">{{ DLUX_STRINGS.builder_filter_services|default:"Services" }}</button>
+            <button type="button" class="scb-chip" data-filter="published">{{ DLUX_STRINGS.builder_filter_published|default:"Published" }}</button>
+            <button type="button" class="scb-chip" data-filter="unpublished">{{ DLUX_STRINGS.builder_filter_unpublished|default:"Not published" }}</button>
+        </div>
+    </div>
+
+    {% if builder_items %}
+    <div class="shop-builder__grid" data-builder-grid>
+        {% for listing in builder_items %}
+            {% include "public_catalog/_builder_card.html" %}
+        {% endfor %}
+    </div>
+    <p class="shop-builder__empty" data-builder-empty hidden>{{ DLUX_STRINGS.builder_no_items|default:"No items match your filters." }}</p>
+    {% else %}
+    <div class="shop-builder__blank dlux-table-shell">
+        <i class="bi bi-box-seam"></i>
+        <p>{{ DLUX_STRINGS.builder_empty_stock|default:"Add products or services first, then publish them here." }}</p>
+    </div>
+    {% endif %}
+</div>
+
+{% include "public_catalog/_builder_customize_modal.html" %}
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="{% static 'public_catalog/js/shop_builder.js' %}?v=20260712b" nonce="{{ request.csp_nonce }}" defer></script>
+{% endblock %}

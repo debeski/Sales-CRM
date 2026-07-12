@@ -1,12 +1,14 @@
 """Per-user Products layout switcher (table / grid / light)."""
+import json
 from decimal import Decimal
+from pathlib import Path
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
-from django.test import RequestFactory, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 
 from catalog.models import Product
@@ -125,6 +127,8 @@ class ProductListViewLayoutTests(TestCase):
         self.assertIn("catalog/product_list.html", resp.template_name)
         html = resp.content.decode()
         self.assertIn("data-products-layout-switch", html)  # toggle present
+        self.assertIn('data-app-pref-url-template="/staff/sys/api/preferences/app/__namespace__/"', html)
+        self.assertIn("catalog/js/products_layout.js?v=20260711b", html)
 
     def test_light_layout_uses_light_table(self):
         user = _set_layout(self.user, "light")
@@ -145,6 +149,36 @@ class ProductListViewLayoutTests(TestCase):
         self.assertIn("dlux-table-shell", html)          # reuses dlux surface
         self.assertIn("?action=view", html)              # expand → detail modal
         self.assertIn("data-products-layout-switch", html)  # toggle still present
+
+
+class ProductsLayoutPreferenceEndpointTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("layout_writer", password="x")
+
+    def test_staff_prefixed_endpoint_persists_products_layout(self):
+        url = reverse("update_app_preference", kwargs={"namespace": PRODUCTS_LAYOUT_NS})
+        self.assertEqual(url, "/staff/sys/api/preferences/app/switch_pos.products_layout/")
+
+        client = Client()
+        self.assertTrue(client.login(username="layout_writer", password="x"))
+        response = client.post(url, data=json.dumps("light"), content_type="application/json")
+
+        self.assertEqual(response.status_code, 200)
+        Profile = apps.get_model("dlux", "Profile")
+        profile = Profile.all_objects.get(user=self.user)
+        self.assertEqual(profile.preferences["app"][PRODUCTS_LAYOUT_NS], "light")
+
+
+class ProductsLayoutStaticContractTests(TestCase):
+    def test_products_layout_js_uses_reversed_preference_url_before_reload(self):
+        js_path = Path(__file__).resolve().parents[1] / "static" / "catalog" / "js" / "products_layout.js"
+        js = js_path.read_text(encoding="utf-8")
+
+        self.assertIn("data-app-pref-url-template", js)
+        self.assertIn("fetch(url", js)
+        self.assertIn("syncAppPrefCache(ns, value)", js)
+        self.assertNotIn("/sys/api/preferences/app/", js)
+        self.assertNotIn("then(reload, reload)", js)
 
 
 def _import_options_or_skip(test):

@@ -120,7 +120,7 @@ class OpeningStockViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         html = resp.content.decode()
 
-        self.assertIn('catalog/js/price_sync.js?v=20260709a', html)
+        self.assertIn('catalog/js/price_sync.js?v=20260711b', html)
         self.assertIn('data-price-sync-row', html)
         self.assertIn('data-price-cost="1"', html)
         self.assertIn('data-price-lyd="1"', html)

@@ -1,0 +1,23 @@
+{% extends "public_catalog/public_base.html" %}
+
+{% block extra_head %}
+<style>
+.public-comingsoon { min-height: 60vh; display: flex; align-items: center; justify-content: center; padding: 2rem; }
+.public-comingsoon__card { text-align: center; max-width: 40ch; }
+.public-comingsoon__card i { font-size: 3rem; opacity: 0.5; }
+.public-comingsoon__card h1 { font-size: 2rem; font-weight: 800; margin: 1rem 0 0.5rem; }
+.public-comingsoon__card p { opacity: 0.75; margin: 0 0 1.25rem; }
+.public-comingsoon__badge { display: inline-block; padding: 0.4rem 1rem; border-radius: 999px; background: rgba(35,99,195,0.12); color: #2363c3; font-weight: 700; letter-spacing: 0.03em; }
+</style>
+{% endblock %}
+
+{% block public_content %}
+<section class="public-comingsoon">
+    <div class="public-comingsoon__card">
+        <i class="bi bi-shop"></i>
+        <h1>{{ public_config.shop_title|default:"Switch Shop" }}</h1>
+        <p>{{ public_config.shop_subtitle }}</p>
+        <span class="public-comingsoon__badge">{{ DLUX_STRINGS.public_coming_soon|default:"Coming soon" }}</span>
+    </div>
+</section>
+{% endblock %}

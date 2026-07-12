@@ -19,24 +19,27 @@ services:
       - ./common:/app/common:rw
       - ./config:/app/config:rw
       - ./finance:/app/finance:rw
+      - ./public_catalog:/app/public_catalog:rw
       - ./sales:/app/sales:rw
       - dlux_runtime:/opt/dlux-runtime:rw
       - static:/app/staticfiles:rw
       - ./media/:/app/media/:rw
       - ./logs/:/app/logs:rw
     environment:
-      DLUX_BAKED_VERSION: "1.4.4"
+      DLUX_BAKED_VERSION: "1.4.6"
 
   caddy:
     # Local dev: plain HTTP only (no ACME/TLS), served on host port 90.
-    # The ERP is the catch-all on :80; the portfolio keeps its localhost default
-    # (never ACMEs, never collides with the :80 catch-all).
+    # The Django/DLux app is the catch-all on :80; the legacy ERP host redirects
+    # back to /staff/ on the same local app.
     ports: !override
       - target: 80
         published: "90"
         protocol: tcp
     environment:
-      CADDY_ERP_ADDRESS: ":80"
+      CADDY_SITE_ADDRESS: ":80"
+      CADDY_ERP_ADDRESS: "http://erp.localhost"
+      CADDY_PRIMARY_URL: "http://localhost:90"
 
   web:
     build: .
@@ -47,6 +50,7 @@ services:
       - ./common:/app/common:rw
       - ./config:/app/config:rw
       - ./finance:/app/finance:rw
+      - ./public_catalog:/app/public_catalog:rw
       - ./sales:/app/sales:rw
       - static:/app/staticfiles:rw
       - ./media/:/app/media/:rw
@@ -67,6 +71,7 @@ services:
       - ./common:/app/common:rw
       - ./config:/app/config:rw
       - ./finance:/app/finance:rw
+      - ./public_catalog:/app/public_catalog:rw
       - ./sales:/app/sales:rw
       - static:/app/staticfiles:rw
       - ./media/:/app/media/:rw

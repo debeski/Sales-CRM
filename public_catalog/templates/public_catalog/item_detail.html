@@ -1,0 +1,24 @@
+{% extends "public_catalog/public_base.html" %}
+
+{% block public_title %}{{ listing.seo_title|default:listing.display_title }}{% endblock %}
+
+{% block public_content %}
+<nav class="public-breadcrumb" aria-label="Breadcrumb">
+    <a href="{% url 'public_catalog:shop' %}"><i class="bi bi-arrow-left"></i> Shop</a>
+</nav>
+<section class="public-detail">
+    <div class="public-detail__media">
+        {% if listing.image_url %}
+        <img src="{{ listing.image_url }}" alt="{{ listing.display_title }}">
+        {% else %}
+        <div class="public-hero__placeholder"><i class="bi bi-box-seam"></i></div>
+        {% endif %}
+    </div>
+    <div class="public-detail__body">
+        <p class="public-kicker">{{ listing.source_label }}</p>
+        <h1>{{ listing.display_title }}</h1>
+        {% if listing.display_summary %}<p class="public-detail__summary">{{ listing.display_summary }}</p>{% endif %}
+        {% include "public_catalog/_item_modal.html" %}
+    </div>
+</section>
+{% endblock %}

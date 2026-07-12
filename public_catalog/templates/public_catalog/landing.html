@@ -1,0 +1,69 @@
+{% extends "public_catalog/public_base.html" %}
+
+{% block public_title %}{{ public_config.shop_title }}{% endblock %}
+
+{% block public_content %}
+<section class="public-hero">
+    {% if hero_listing and hero_listing.image_url %}
+    <img class="public-hero__image" src="{{ hero_listing.image_url }}" alt="">
+    {% elif APP_CONFIG.logo_url %}
+    <div class="public-hero__fallback">
+        <img src="{{ APP_CONFIG.logo_url }}" alt="">
+    </div>
+    {% endif %}
+    <div class="public-hero__scrim"></div>
+    <div class="public-hero__copy">
+        <p class="public-kicker">Switch Libya</p>
+        <h1>{{ public_config.shop_title }}</h1>
+        <p>{{ public_config.shop_subtitle }}</p>
+        <div class="public-hero__stats" aria-label="Catalog summary">
+            <span><strong>{{ listing_counts.total }}</strong> public items</span>
+            <span><strong>{{ listing_counts.products }}</strong> products</span>
+            <span><strong>{{ listing_counts.services }}</strong> services</span>
+        </div>
+        <div class="public-actions">
+            <a class="btn btn-primary px-4" href="{% url 'public_catalog:shop' %}">
+                <i class="bi bi-shop me-1"></i>Shop
+            </a>
+            <button type="button"
+                    class="btn btn-outline-light px-4"
+                    data-dynamic-modal="{% url 'public_catalog:contact_modal' %}"
+                    data-modal-title="Contact Switch"
+                    data-public-modal-size="fullscreen">
+                <i class="bi bi-envelope me-1"></i>Contact
+            </button>
+        </div>
+    </div>
+</section>
+
+{% if featured_listings %}
+<section class="public-section">
+    <div class="public-section__head">
+        <div>
+            <p class="public-kicker">Featured catalog</p>
+            <h2>Ready for customer viewing</h2>
+        </div>
+        <a href="{% url 'public_catalog:shop' %}">View all</a>
+    </div>
+    <div class="public-card-grid public-card-grid--featured">
+        {% for listing in featured_listings %}
+            {% include "public_catalog/_listing_card.html" %}
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if contact_links %}
+<section class="public-contact">
+    <p class="public-kicker">Contact</p>
+    <h2>Talk to Switch about supply and installation</h2>
+    <div class="public-actions">
+        {% for link in contact_links %}
+        <a class="btn btn-outline-primary px-4" href="{{ link.url }}">
+            <i class="bi {{ link.icon }} me-1"></i>{{ link.label }}
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,66 @@
+{% load static %}
+<article class="scb-card{% if listing.pk and listing.is_published %} is-published{% endif %}{% if listing.is_featured %} is-featured{% endif %}"
+         data-card
+         data-kind="{{ listing.source_kind }}"
+         data-source-id="{{ listing.product_id|default:listing.service_id }}"
+         data-listing-id="{{ listing.pk|default:'' }}"
+         data-published="{% if listing.pk and listing.is_published %}1{% else %}0{% endif %}"
+         data-featured="{% if listing.is_featured %}1{% else %}0{% endif %}"
+         data-available="{% if listing.is_available_for_public %}1{% else %}0{% endif %}"
+         data-sort="{{ listing.sort_order }}"
+         data-search="{{ listing.display_title|lower }} {{ listing.source_label|lower }}"
+         data-title="{{ listing.public_title }}"
+         data-summary="{{ listing.public_summary }}"
+         data-body="{{ listing.public_body }}"
+         data-installation="{{ listing.installation_notes }}"
+         data-warranty="{{ listing.warranty_notes }}"
+         data-show-price="{% if listing.show_price %}1{% else %}0{% endif %}"
+         data-show-availability="{% if listing.show_availability %}1{% else %}0{% endif %}"
+         data-show-when-unavailable="{% if listing.show_when_unavailable %}1{% else %}0{% endif %}"
+         data-image="{{ listing.image_url }}"
+         data-name="{{ listing.source.name }}"
+         draggable="false">
+
+    <div class="scb-card__media">
+        {% if listing.image_url %}
+        <img src="{{ listing.image_url }}" alt="{{ listing.display_title }}" data-card-image draggable="false">
+        {% else %}
+        <span class="scb-card__ph" data-card-image><i class="bi {% if listing.source_kind == 'service' %}bi-tools{% else %}bi-box-seam{% endif %}"></i></span>
+        {% endif %}
+        <span class="scb-card__kind">{% if listing.source_kind == 'service' %}{{ DLUX_STRINGS.builder_source_service|default:"Service" }}{% else %}{{ DLUX_STRINGS.builder_source_product|default:"Product" }}{% endif %}</span>
+        <button type="button" class="scb-card__grip" data-card-grip title="{{ DLUX_STRINGS.builder_sort_order|default:'Sort order' }}"><i class="bi bi-grip-vertical"></i></button>
+    </div>
+
+    <div class="scb-card__body">
+        <div class="scb-card__topline">
+            <span class="scb-card__label">{{ listing.source_label }}</span>
+            <span class="scb-avail scb-avail--{{ listing.availability_code }}">{{ listing.availability_label }}</span>
+        </div>
+        <h3 class="scb-card__title" data-card-title>{{ listing.display_title }}</h3>
+        <div class="scb-card__price">
+            {% with price=listing.source.selling_price_lyd %}
+            {% if price %}<i class="bi bi-cash-coin"></i>{{ price|floatformat:2 }} LYD{% endif %}
+            {% endwith %}
+        </div>
+    </div>
+
+    <div class="scb-card__controls">
+        <label class="scb-publish">
+            <input type="checkbox" role="switch" data-publish-toggle
+                   {% if listing.pk and listing.is_published %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+            <span data-publish-label>{% if listing.pk and listing.is_published %}{{ DLUX_STRINGS.builder_published|default:"Published" }}{% else %}{{ DLUX_STRINGS.builder_publish|default:"Publish" }}{% endif %}</span>
+        </label>
+        <div class="scb-card__tools">
+            <button type="button" class="scb-tool" data-feature-toggle title="{{ DLUX_STRINGS.builder_feature|default:'Feature' }}" {% if not can_edit %}disabled{% endif %}>
+                <i class="bi {% if listing.is_featured %}bi-star-fill{% else %}bi-star{% endif %}"></i>
+            </button>
+            <button type="button" class="scb-tool" data-customize title="{{ DLUX_STRINGS.builder_customize|default:'Customize' }}" {% if not can_edit %}disabled{% endif %}>
+                <i class="bi bi-pencil-square"></i>
+            </button>
+            <a class="scb-tool scb-tool--link" data-public-link draggable="false" href="{% if listing.pk %}{{ listing.get_absolute_url }}{% endif %}" target="_blank" rel="noopener"
+               title="{{ DLUX_STRINGS.builder_view_public|default:'Open public page' }}" {% if not listing.pk or not listing.is_published %}hidden{% endif %}>
+                <i class="bi bi-box-arrow-up-right"></i>
+            </a>
+        </div>
+    </div>
+</article>
