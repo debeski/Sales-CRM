@@ -35,7 +35,7 @@ Caddy proxies `switchlibya.ly`/`www.switchlibya.ly` to Django; the optional lega
   `/shop/items/<slug>/modal/`, and `/contact/modal/`.
 - Staff routes: `/staff/`, `/staff/accounts/...`, `/staff/sys/...`,
   `/staff/workspace/`, `/staff/catalog/`, `/staff/sales/`, `/staff/finance/`,
-  `/staff/shop-builder/`, `/staff/app-modals/...`, and `/staff/admin/`.
+  `/staff/shop-builder/`, `/staff/shop-builder/homepage/`, `/staff/app-modals/...`, and `/staff/admin/`.
 - `dlux.urls` is mounted below `/staff/`, so `reverse("login")` resolves to
   `/staff/accounts/login/`; staff-only views still use normal Django auth
   (`LoginRequiredMixin`, permissions, and `LOGIN_URL = "login"`).
@@ -68,7 +68,17 @@ sidebar navigation. Global config lives in the DLux app-settings namespace
 `switch_pos.public_catalog`
 (`storefront_enabled`, `featured_limit`, shop title/subtitle, contact fields, default
 show-price/availability); when `storefront_enabled` is off the public views return a
-`coming_soon.html` page with HTTP 503.
+`coming_soon.html` page with HTTP 503 — except staff with `view_publiccataloglisting`,
+who may preview the storefront while offline via `?preview=1`.
+
+The **public landing page** is composed from the Homepage Builder
+(`/staff/shop-builder/homepage/`), a live-preview-iframe editor whose config lives in
+its own app-settings namespace `switch_pos.public_homepage` (`public_catalog/homepage.py`:
+hero copy/CTA/background mode/overlay, an accent colour, and an ordered, toggleable list
+of sections — featured, categories, services, story, contact). `PublicLandingView` and
+`landing.html` are fully driven by that config; the accent injects a `--public-accent`
+CSS variable into `public_base.html`. Its `homepage_save` endpoint shares the same
+POST-only `mutation_endpoint` + `sidebar_exclude` treatment as the catalog builder.
 
 `PublicContactMessage` is the first public write path. Contact form posts carry a
 stable hidden idempotency key enforced by a database unique constraint; repeated

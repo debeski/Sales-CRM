@@ -127,7 +127,9 @@ class PublicCatalogBuilderTests(TestCase):
         en_entry = next(entry for entry in en_catalog if entry["url_name"] == "public_catalog_staff:builder")
         ar_entry = next(entry for entry in ar_catalog if entry["url_name"] == "public_catalog_staff:builder")
 
-        self.assertEqual(names, {"public_catalog_staff:builder"})
+        # Only the two builder pages are navigable; the POST-only write endpoints
+        # (toggle-publish/update-listing/reorder/settings/homepage-save) are excluded.
+        self.assertEqual(names, {"public_catalog_staff:builder", "public_catalog_staff:homepage_builder"})
         self.assertEqual(en_entry["label"], "Public Catalog Builder")
         self.assertEqual(ar_entry["label"], "منشئ المتجر العام")
 

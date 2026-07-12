@@ -230,3 +230,82 @@ def builder_settings(request):
         "storefront_enabled": cfg["storefront_enabled"],
         "featured_limit": cfg["featured_limit"],
     }})
+
+
+# --------------------------------------------------------------------------- #
+# Public homepage (landing page) builder
+# --------------------------------------------------------------------------- #
+def _save_homepage_image(uploaded, prefix):
+    import os
+    from uuid import uuid4
+
+    from django.core.files.storage import default_storage
+
+    ext = os.path.splitext(uploaded.name)[1].lower() or ".png"
+    name = f"public_homepage/{prefix}-{uuid4().hex}{ext}"
+    saved = default_storage.save(name, uploaded)
+    return default_storage.url(saved)
+
+
+class PublicHomepageBuilderView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    template_name = "public_catalog/homepage_builder.html"
+    permission_required = "public_catalog.view_publiccataloglisting"
+
+    def get_context_data(self, **kwargs):
+        from common.i18n import t
+        from .homepage import HOMEPAGE_NS, get_homepage_config, resolve_sections
+
+        ctx = super().get_context_data(**kwargs)
+        cfg = get_homepage_config()
+        ctx.update({
+            "homepage_config": cfg,
+            "homepage_sections": resolve_sections(cfg),
+            "homepage_settings_ns": HOMEPAGE_NS,
+            "hero_media_choices": [
+                ("featured", t("hp_media_featured", "Featured image")),
+                ("logo", t("hp_media_logo", "Logo")),
+                ("custom", t("hp_media_custom", "Custom image")),
+                ("gradient", t("hp_media_gradient", "Gradient")),
+            ],
+            "accent_presets": ["#345b86", "#0ea5e9", "#16a34a", "#dc2626", "#9333ea", "#f59e0b", "#0f172a"],
+            "can_edit": self.request.user.has_perm(EDIT_PERM),
+        })
+        return ctx
+
+
+@mutation_endpoint
+def homepage_save(request):
+    from .homepage import HOMEPAGE_DEFAULTS, set_homepage_config
+
+    post = request.POST
+    patch = {}
+    for key, default in HOMEPAGE_DEFAULTS.items():
+        if key in ("sections", "hero_image", "story_image"):
+            continue
+        if key in ("hero_show_contact", "show_stats"):
+            if key in post:
+                patch[key] = post.get(key) in ("1", "true", "on", "True")
+        elif key == "hero_overlay":
+            if key in post:
+                patch[key] = post.get(key)
+        elif isinstance(default, str):
+            if key in post:
+                patch[key] = (post.get(key) or "").strip()
+
+    if "hero_image" in request.FILES:
+        patch["hero_image"] = _save_homepage_image(request.FILES["hero_image"], "hero")
+    elif post.get("clear_hero_image") in ("1", "true", "on"):
+        patch["hero_image"] = ""
+    if "story_image" in request.FILES:
+        patch["story_image"] = _save_homepage_image(request.FILES["story_image"], "story")
+    elif post.get("clear_story_image") in ("1", "true", "on"):
+        patch["story_image"] = ""
+
+    if "sections" in post:
+        try:
+            patch["sections"] = json.loads(post.get("sections") or "[]")
+        except ValueError:
+            pass
+
+    cfg = set_homepage_config(patch, request=request)
+    return JsonResponse({"ok": True, "config": cfg})

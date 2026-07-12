@@ -948,3 +948,79 @@
         transform: none;
     }
 }
+
+/* ── Homepage builder additions (accent, hero overlay, categories, story) ── */
+.public-shell {
+    --public-accent: var(--primal, #345b86);
+}
+.public-shell .public-kicker { color: var(--public-accent); }
+.public-shell .btn-primary {
+    background: var(--public-accent);
+    border-color: var(--public-accent);
+}
+.public-shell .btn-outline-primary {
+    color: var(--public-accent);
+    border-color: var(--public-accent);
+}
+.public-shell .btn-outline-primary:hover {
+    background: var(--public-accent);
+    border-color: var(--public-accent);
+    color: #fff;
+}
+
+.public-hero__scrim { opacity: calc(var(--scrim, 55) / 100); }
+.public-hero--gradient {
+    background:
+        radial-gradient(120% 120% at 15% 10%, rgba(var(--primal-rgb, 52, 91, 134), .5), transparent 60%),
+        linear-gradient(135deg, #0b1220, #16233b 60%, #0b1220);
+}
+.public-hero--gradient .public-hero__scrim { opacity: 0; }
+
+.public-category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: .8rem;
+}
+.public-category {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .6rem;
+    padding: 1rem 1.15rem;
+    border-radius: 12px;
+    border: 1px solid var(--bs-border-color, rgba(148, 163, 184, .3));
+    background: var(--bs-body-bg, #fff);
+    text-decoration: none;
+    color: inherit;
+    font-weight: 600;
+    transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+.public-category:hover {
+    border-color: var(--public-accent);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, .1);
+}
+.public-category__count {
+    background: color-mix(in srgb, var(--public-accent) 14%, transparent);
+    color: var(--public-accent);
+    border-radius: 999px;
+    padding: .1rem .6rem;
+    font-size: .85rem;
+}
+
+.public-story {
+    display: grid;
+    grid-template-columns: 1.2fr .8fr;
+    gap: clamp(1rem, 3vw, 2.4rem);
+    align-items: center;
+}
+.public-story__copy h2 { margin: .2rem 0 .8rem; }
+.public-story__media img {
+    width: 100%;
+    border-radius: 14px;
+    object-fit: cover;
+    aspect-ratio: 4 / 3;
+}
+@media (max-width: 767.98px) {
+    .public-story { grid-template-columns: 1fr; }
+}

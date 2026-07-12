@@ -1,69 +1,115 @@
 {% extends "public_catalog/public_base.html" %}
+{% load static %}
 
-{% block public_title %}{{ public_config.shop_title }}{% endblock %}
+{% block public_title %}{{ homepage_config.hero_title|default:public_config.shop_title }}{% endblock %}
 
 {% block public_content %}
-<section class="public-hero">
-    {% if hero_listing and hero_listing.image_url %}
+<section class="public-hero public-hero--{{ homepage_config.hero_media }}" style="--scrim:{{ homepage_config.hero_overlay }}">
+    {% if homepage_config.hero_media == 'custom' and homepage_config.hero_image %}
+    <img class="public-hero__image" src="{{ homepage_config.hero_image }}" alt="">
+    {% elif homepage_config.hero_media == 'featured' and hero_listing and hero_listing.image_url %}
     <img class="public-hero__image" src="{{ hero_listing.image_url }}" alt="">
-    {% elif APP_CONFIG.logo_url %}
-    <div class="public-hero__fallback">
-        <img src="{{ APP_CONFIG.logo_url }}" alt="">
-    </div>
+    {% elif homepage_config.hero_media == 'logo' and APP_CONFIG.logo_url %}
+    <div class="public-hero__fallback"><img src="{{ APP_CONFIG.logo_url }}" alt=""></div>
     {% endif %}
     <div class="public-hero__scrim"></div>
     <div class="public-hero__copy">
-        <p class="public-kicker">Switch Libya</p>
-        <h1>{{ public_config.shop_title }}</h1>
-        <p>{{ public_config.shop_subtitle }}</p>
-        <div class="public-hero__stats" aria-label="Catalog summary">
-            <span><strong>{{ listing_counts.total }}</strong> public items</span>
-            <span><strong>{{ listing_counts.products }}</strong> products</span>
-            <span><strong>{{ listing_counts.services }}</strong> services</span>
+        {% if homepage_config.hero_kicker %}<p class="public-kicker">{{ homepage_config.hero_kicker }}</p>{% endif %}
+        <h1>{{ homepage_config.hero_title|default:public_config.shop_title }}</h1>
+        <p>{{ homepage_config.hero_subtitle|default:public_config.shop_subtitle }}</p>
+        {% if homepage_config.show_stats %}
+        <div class="public-hero__stats" aria-label="{{ DLUX_STRINGS.hp_stats_label|default:'Catalog summary' }}">
+            <span><strong>{{ listing_counts.total }}</strong> {{ DLUX_STRINGS.hp_stats_items|default:'public items' }}</span>
+            <span><strong>{{ listing_counts.products }}</strong> {{ DLUX_STRINGS.hp_stats_products|default:'products' }}</span>
+            <span><strong>{{ listing_counts.services }}</strong> {{ DLUX_STRINGS.hp_stats_services|default:'services' }}</span>
         </div>
+        {% endif %}
         <div class="public-actions">
-            <a class="btn btn-primary px-4" href="{% url 'public_catalog:shop' %}">
-                <i class="bi bi-shop me-1"></i>Shop
+            <a class="btn btn-primary px-4" href="{{ homepage_config.hero_primary_url|default:'' }}{% if not homepage_config.hero_primary_url %}{% url 'public_catalog:shop' %}{% endif %}">
+                <i class="bi bi-shop me-1"></i>{{ homepage_config.hero_primary_label|default:'Shop' }}
             </a>
+            {% if homepage_config.hero_show_contact %}
             <button type="button"
                     class="btn btn-outline-light px-4"
                     data-dynamic-modal="{% url 'public_catalog:contact_modal' %}"
-                    data-modal-title="Contact Switch"
+                    data-modal-title="{{ DLUX_STRINGS.hp_contact_title|default:'Contact Switch' }}"
                     data-public-modal-size="fullscreen">
-                <i class="bi bi-envelope me-1"></i>Contact
+                <i class="bi bi-envelope me-1"></i>{{ DLUX_STRINGS.hp_contact|default:'Contact' }}
             </button>
+            {% endif %}
         </div>
     </div>
 </section>
 
-{% if featured_listings %}
-<section class="public-section">
-    <div class="public-section__head">
-        <div>
-            <p class="public-kicker">Featured catalog</p>
-            <h2>Ready for customer viewing</h2>
+{% for section in homepage_sections %}
+    {% if section.key == 'featured' and featured_listings %}
+    <section class="public-section" data-section="featured">
+        <div class="public-section__head">
+            <div>
+                {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
+                <h2>{{ section.heading }}</h2>
+            </div>
+            <a href="{% url 'public_catalog:shop' %}">{{ DLUX_STRINGS.hp_view_all|default:'View all' }}</a>
         </div>
-        <a href="{% url 'public_catalog:shop' %}">View all</a>
-    </div>
-    <div class="public-card-grid public-card-grid--featured">
-        {% for listing in featured_listings %}
-            {% include "public_catalog/_listing_card.html" %}
-        {% endfor %}
-    </div>
-</section>
-{% endif %}
+        <div class="public-card-grid public-card-grid--featured">
+            {% for listing in featured_listings %}{% include "public_catalog/_listing_card.html" %}{% endfor %}
+        </div>
+    </section>
 
-{% if contact_links %}
-<section class="public-contact">
-    <p class="public-kicker">Contact</p>
-    <h2>Talk to Switch about supply and installation</h2>
-    <div class="public-actions">
-        {% for link in contact_links %}
-        <a class="btn btn-outline-primary px-4" href="{{ link.url }}">
-            <i class="bi {{ link.icon }} me-1"></i>{{ link.label }}
-        </a>
-        {% endfor %}
-    </div>
-</section>
-{% endif %}
+    {% elif section.key == 'categories' and category_tiles %}
+    <section class="public-section" data-section="categories">
+        <div class="public-section__head">
+            <div>
+                {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
+                <h2>{{ section.heading }}</h2>
+            </div>
+        </div>
+        <div class="public-category-grid">
+            {% for cat in category_tiles %}
+            <a class="public-category" href="{% url 'public_catalog:shop' %}?kind=products&q={{ cat.name|urlencode }}">
+                <span class="public-category__name">{{ cat.name }}</span>
+                <span class="public-category__count">{{ cat.count }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+
+    {% elif section.key == 'services' and service_listings %}
+    <section class="public-section" data-section="services">
+        <div class="public-section__head">
+            <div>
+                {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
+                <h2>{{ section.heading }}</h2>
+            </div>
+            <a href="{% url 'public_catalog:shop' %}?kind=services">{{ DLUX_STRINGS.hp_view_all|default:'View all' }}</a>
+        </div>
+        <div class="public-card-grid">
+            {% for listing in service_listings %}{% include "public_catalog/_listing_card.html" %}{% endfor %}
+        </div>
+    </section>
+
+    {% elif section.key == 'story' %}
+    <section class="public-section public-story" data-section="story">
+        <div class="public-story__copy">
+            {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
+            <h2>{{ section.heading }}</h2>
+            {% if homepage_config.story_body %}<p>{{ homepage_config.story_body|linebreaksbr }}</p>{% endif %}
+        </div>
+        {% if homepage_config.story_image %}
+        <div class="public-story__media"><img src="{{ homepage_config.story_image }}" alt=""></div>
+        {% endif %}
+    </section>
+
+    {% elif section.key == 'contact' and contact_links %}
+    <section class="public-contact" data-section="contact">
+        {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
+        <h2>{{ section.heading }}</h2>
+        <div class="public-actions">
+            {% for link in contact_links %}
+            <a class="btn btn-outline-primary px-4" href="{{ link.url }}"><i class="bi {{ link.icon }} me-1"></i>{{ link.label }}</a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+{% endfor %}
 {% endblock %}

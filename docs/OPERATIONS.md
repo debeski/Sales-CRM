@@ -114,6 +114,12 @@ language, theme). Health endpoint: `/health/`.
    Public pages show availability bands, not exact stock counts. The full-screen
    contact modal posts to `/contact/modal/`, saves a `PublicContactMessage` with an
    idempotency key, and emails the configured contact recipient when SMTP is valid.
+   Design the landing page itself from **Homepage Builder**
+   (`/staff/shop-builder/homepage/`): edit the hero (kicker/title/subtitle, primary
+   button, background mode — featured/logo/custom/gradient — and overlay), toggle and
+   reorder sections (featured, categories, services, story, contact) with per-section
+   copy, and pick an accent colour — all with a **live preview** that also works while
+   the storefront is offline (`?preview=1`). Changes autosave.
 5. Create staff users and add them to one seeded role (`seed_roles` creates Sales
    Manager, Sales Representative, and Delivery Courier). For delivery people,
    technicians, or anyone carrying advances/loans/service payouts, create a
@@ -143,6 +149,7 @@ language, theme). Health endpoint: `/health/`.
 | `/staff/sales/new/` | New invoice editor |
 | `/staff/catalog/` | Products & stock |
 | `/staff/shop-builder/` | Public Catalog Builder (curate the public shop) |
+| `/staff/shop-builder/homepage/` | Public Homepage Builder (design the landing page, live preview) |
 | `/staff/catalog/services/` | Services |
 | `/staff/catalog/suppliers/` | Supplier list |
 | `/staff/catalog/purchase-invoices/` | Purchase invoices / inbound stock invoices |

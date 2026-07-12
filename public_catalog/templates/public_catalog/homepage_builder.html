@@ -1,0 +1,155 @@
+{% extends "dlux/base.html" %}
+{% load static %}
+
+{% block title %}{{ DLUX_STRINGS.hp_builder_title|default:"Homepage Builder" }}{% endblock %}
+
+{% block extra_head %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'public_catalog/css/homepage_builder.css' %}?v=20260712a">
+{% endblock %}
+
+{% block content %}
+<div class="hpb"
+     data-hpb
+     data-can-edit="{% if can_edit %}1{% endif %}"
+     data-save-url="{% url 'public_catalog_staff:homepage_save' %}"
+     data-preview-url="{% url 'public_catalog:landing' %}?preview=1"
+     data-saved-msg="{{ DLUX_STRINGS.hp_saved|default:'Saved' }}"
+     data-saving-msg="{{ DLUX_STRINGS.hp_saving|default:'Saving…' }}"
+     data-error-msg="{{ DLUX_STRINGS.hp_error|default:'Could not save' }}">
+
+    <header class="hpb__head dlux-table-shell">
+        <div class="hpb__head-copy">
+            <h1><i class="bi bi-easel2 me-2"></i>{{ DLUX_STRINGS.hp_builder_title|default:"Homepage Builder" }}</h1>
+            <p>{{ DLUX_STRINGS.hp_builder_sub|default:"Design your public landing page — hero, sections and accent — with a live preview." }}</p>
+        </div>
+        <div class="hpb__head-actions">
+            <span class="hpb__status" data-hpb-status aria-live="polite"></span>
+            <a class="btn btn-outline-secondary rounded-pill" href="{% url 'public_catalog:landing' %}" target="_blank" rel="noopener">
+                <i class="bi bi-box-arrow-up-right me-1"></i>{{ DLUX_STRINGS.hp_open_site|default:"Open live site" }}
+            </a>
+            <button type="button" class="btn btn-primary rounded-pill"
+                    data-dynamic-modal="{% url 'dlux_app_settings_modal' homepage_settings_ns %}"
+                    data-modal-title="{{ DLUX_STRINGS.options_public_homepage|default:'Public homepage' }}">
+                <i class="bi bi-sliders me-1"></i>{{ DLUX_STRINGS.hp_settings|default:"Settings" }}
+            </button>
+        </div>
+    </header>
+
+    <div class="hpb__grid">
+        <form class="hpb__editor" data-hpb-form {% if not can_edit %}data-readonly{% endif %}>
+
+            <details class="hpb-panel" open>
+                <summary><i class="bi bi-stars me-2"></i>{{ DLUX_STRINGS.hp_panel_hero|default:"Hero" }}</summary>
+                <div class="hpb-panel__body">
+                    <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_kicker|default:"Kicker" }}</span>
+                        <input type="text" name="hero_kicker" maxlength="120" value="{{ homepage_config.hero_kicker }}"></label>
+                    <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_title|default:"Title" }}</span>
+                        <input type="text" name="hero_title" maxlength="200" value="{{ homepage_config.hero_title }}" placeholder="{{ public_config.shop_title }}"></label>
+                    <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_subtitle|default:"Subtitle" }}</span>
+                        <textarea name="hero_subtitle" rows="2" placeholder="{{ public_config.shop_subtitle }}">{{ homepage_config.hero_subtitle }}</textarea></label>
+
+                    <div class="hpb-field-row">
+                        <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_primary_label|default:"Button label" }}</span>
+                            <input type="text" name="hero_primary_label" maxlength="60" value="{{ homepage_config.hero_primary_label }}"></label>
+                        <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_primary_url|default:"Button link" }}</span>
+                            <input type="text" name="hero_primary_url" value="{{ homepage_config.hero_primary_url }}" placeholder="/shop/"></label>
+                    </div>
+
+                    <label class="hpb-check"><input type="checkbox" name="hero_show_contact" {% if homepage_config.hero_show_contact %}checked{% endif %}> {{ DLUX_STRINGS.hp_hero_show_contact|default:"Show Contact button" }}</label>
+                    <label class="hpb-check"><input type="checkbox" name="show_stats" {% if homepage_config.show_stats %}checked{% endif %}> {{ DLUX_STRINGS.hp_show_stats|default:"Show catalog stats" }}</label>
+
+                    <div class="hpb-field">
+                        <span>{{ DLUX_STRINGS.hp_hero_media|default:"Hero background" }}</span>
+                        <div class="hpb-seg" role="radiogroup">
+                            {% for mode, label in hero_media_choices %}
+                            <label class="hpb-seg__opt">
+                                <input type="radio" name="hero_media" value="{{ mode }}" {% if homepage_config.hero_media == mode %}checked{% endif %}>
+                                <span>{{ label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="hpb-field" data-hero-image-field {% if homepage_config.hero_media != 'custom' %}hidden{% endif %}>
+                        <span>{{ DLUX_STRINGS.hp_hero_image|default:"Custom image" }}</span>
+                        <div class="hpb-image">
+                            <span class="hpb-image__preview" data-hero-preview>{% if homepage_config.hero_image %}<img src="{{ homepage_config.hero_image }}" alt="">{% else %}<i class="bi bi-image"></i>{% endif %}</span>
+                            <label class="btn btn-sm btn-outline-secondary rounded-pill mb-0"><i class="bi bi-upload me-1"></i>{{ DLUX_STRINGS.hp_upload|default:"Upload" }}<input type="file" name="hero_image" accept="image/*" hidden data-hero-input></label>
+                            <button type="button" class="btn btn-sm btn-link text-danger" data-clear="hero_image" {% if not homepage_config.hero_image %}hidden{% endif %}><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+
+                    <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_overlay|default:"Overlay darkness" }} <b data-overlay-out>{{ homepage_config.hero_overlay }}</b>%</span>
+                        <input type="range" name="hero_overlay" min="0" max="100" step="5" value="{{ homepage_config.hero_overlay }}" data-overlay></label>
+                </div>
+            </details>
+
+            <details class="hpb-panel" open>
+                <summary><i class="bi bi-list-nested me-2"></i>{{ DLUX_STRINGS.hp_panel_sections|default:"Sections" }}</summary>
+                <div class="hpb-panel__body">
+                    <p class="hpb-hint">{{ DLUX_STRINGS.hp_sections_hint|default:"Toggle sections and use the arrows to reorder them on the page." }}</p>
+                    <div class="hpb-sections" data-hpb-sections>
+                        {% for section in homepage_sections %}
+                        <div class="hpb-section" data-section-key="{{ section.key }}">
+                            <div class="hpb-section__bar">
+                                <span class="hpb-section__move">
+                                    <button type="button" data-move="up" aria-label="up"><i class="bi bi-chevron-up"></i></button>
+                                    <button type="button" data-move="down" aria-label="down"><i class="bi bi-chevron-down"></i></button>
+                                </span>
+                                <label class="hpb-switch"><input type="checkbox" data-section-enabled {% if section.enabled %}checked{% endif %}>
+                                    <span>{{ section.label }}</span></label>
+                            </div>
+                            <div class="hpb-section__fields">
+                                <input type="text" name="{{ section.key }}_kicker" value="{{ section.kicker }}" placeholder="{{ DLUX_STRINGS.hp_kicker|default:'Kicker' }}">
+                                <input type="text" name="{{ section.key }}_heading" value="{{ section.heading }}" placeholder="{{ DLUX_STRINGS.hp_heading|default:'Heading' }}">
+                                {% if section.key == 'story' %}
+                                <textarea name="story_body" rows="3" placeholder="{{ DLUX_STRINGS.hp_story_body|default:'Tell your story…' }}">{{ homepage_config.story_body }}</textarea>
+                                <div class="hpb-image">
+                                    <span class="hpb-image__preview" data-story-preview>{% if homepage_config.story_image %}<img src="{{ homepage_config.story_image }}" alt="">{% else %}<i class="bi bi-image"></i>{% endif %}</span>
+                                    <label class="btn btn-sm btn-outline-secondary rounded-pill mb-0"><i class="bi bi-upload me-1"></i>{{ DLUX_STRINGS.hp_upload|default:"Upload" }}<input type="file" name="story_image" accept="image/*" hidden data-story-input></label>
+                                    <button type="button" class="btn btn-sm btn-link text-danger" data-clear="story_image" {% if not homepage_config.story_image %}hidden{% endif %}><i class="bi bi-trash"></i></button>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </details>
+
+            <details class="hpb-panel" open>
+                <summary><i class="bi bi-palette me-2"></i>{{ DLUX_STRINGS.hp_panel_accent|default:"Accent" }}</summary>
+                <div class="hpb-panel__body">
+                    <div class="hpb-accent">
+                        <input type="color" name="accent" value="{{ homepage_config.accent|default:'#345b86' }}" data-accent-input>
+                        <div class="hpb-swatches" data-accent-presets>
+                            {% for hex in accent_presets %}<button type="button" class="hpb-swatch" style="background:{{ hex }}" data-accent="{{ hex }}" title="{{ hex }}"></button>{% endfor %}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-link" data-accent-reset>{{ DLUX_STRINGS.hp_accent_reset|default:"Use theme default" }}</button>
+                    </div>
+                    <input type="hidden" name="accent_enabled" value="{% if homepage_config.accent %}1{% else %}0{% endif %}" data-accent-enabled>
+                </div>
+            </details>
+        </form>
+
+        <div class="hpb__preview">
+            <div class="hpb__preview-bar">
+                <div class="hpb__viewport">
+                    <button type="button" data-viewport="desktop" class="is-active" title="Desktop"><i class="bi bi-display"></i></button>
+                    <button type="button" data-viewport="mobile" title="Mobile"><i class="bi bi-phone"></i></button>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" data-hpb-refresh><i class="bi bi-arrow-clockwise me-1"></i>{{ DLUX_STRINGS.hp_refresh|default:"Refresh" }}</button>
+            </div>
+            <div class="hpb__frame-wrap" data-frame-wrap>
+                <iframe data-hpb-frame src="{% url 'public_catalog:landing' %}?preview=1" title="{{ DLUX_STRINGS.hp_preview|default:'Preview' }}" loading="lazy"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ block.super }}
+<script src="{% static 'public_catalog/js/homepage_builder.js' %}?v=20260712a" nonce="{{ request.csp_nonce }}" defer></script>
+{% endblock %}

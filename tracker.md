@@ -3,7 +3,7 @@
 ## Part 1: Project Related
 
 ### Current Verified Snapshot:
-Django POS/ERP on django-lux 1.4.4 (host venv symlinked to mounted source `/Users/debeski/Desktop/depy/pkg-django-lux/dlux`). Apps: finance, catalog, sales, common, public_catalog. Public `/` + `/shop/...` + `/contact/modal/`; staff workflow under `/staff/...` (+ `/staff/shop-builder/` public-catalog builder); Caddy only proxies/legacy-redirects. VERSION/CHANGELOG at v0.5.0; v0.4.1 is tagged. Current baseline: 157 pass. `public_catalog` unreleased migration is squashed to `0001`.
+Django POS/ERP on django-lux 1.4.4 (host venv symlinked to mounted source `/Users/debeski/Desktop/depy/pkg-django-lux/dlux`). Apps: finance, catalog, sales, common, public_catalog. Public `/` + `/shop/...` + `/contact/modal/`; staff workflow under `/staff/...` (+ `/staff/shop-builder/` catalog builder & `/staff/shop-builder/homepage/` homepage builder); Caddy only proxies/legacy-redirects. VERSION/CHANGELOG at v0.5.1 (unreleased; v0.5.0 is tagged). Current baseline: 166 pass. `public_catalog` unreleased migration is squashed to `0001`.
 
 ### Current Project Adopted Standards:
 - Scoped models via dlux ScopedModel; list pages via common.ScopedListView + dlux modal_manager.
@@ -23,6 +23,7 @@ Django POS/ERP on django-lux 1.4.4 (host venv symlinked to mounted source `/User
 Audit done 2026-07-02: barcode already present; migrations clean; no scraping deps yet.
 
 ### Current Project's Unsolved Known Bugs:
+- Live VM deployment drift observed 2026-07-12: `switchlibya.ly`/`www` still serve old static portfolio from Caddy while `erp.switchlibya.ly` proxies Django; current repo Caddy/Compose would proxy apex/www to Django and redirect `erp`, so VM is running old Caddy/Compose config or stale containers.
 - Deployment `.secrets/.env` outbound email unset: `SMTP_RELAY_USER`/`SMTP_RELAY_PASSWORD` empty → smtp-relay can't auth to Gmail (email won't send until real creds added). Not foundation-related.
 - Local dev sqlite drift only: leftover NOT NULL `sales_invoice.attachment` column (sqlite never dropped it post-v0.2.3) breaks `seed_demo` on that file. Schema from migrations is correct (tests green on fresh DB); recreate dev DB to clear.
 
@@ -33,6 +34,7 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [ ] Optional: inject per-list Add button into the filter bar (config "buttons") vs current separate top-right button.
   - [ ] Browser smoke-test modal edit/delete (row actions) — combobox verified via test client.
 - **Completed Recently:**
+  - [x] (v0.5.1) Public Homepage Builder at `/staff/shop-builder/homepage/`: live-preview-iframe editor for the landing page (hero copy/CTA/background mode/overlay, reorderable+toggleable sections w/ per-section copy, Story block, accent colour). New `public_catalog/homepage.py` config in namespace `switch_pos.public_homepage` + `register_app_settings` tile; `landing.html`/`PublicLandingView` fully config/section-driven (featured/categories/services/story/contact); accent → `--public-accent` var. `homepage_save` reuses `mutation_endpoint`+`sidebar_exclude`; staff `?preview=1` bypasses the offline 503 gate. `homepage_builder.{html,css,js}`, EN/AR. +14 tests → 166 pass.
   - [x] (v0.5.0) Public catalog builder sidebar label translation: removed explicit lazy callback label and added `public_catalog_staff_builder` EN/AR discovery key; regression checks `Public Catalog Builder` / `منشئ المتجر العام`.
   - [x] (v0.5.0) Workspace dashboard sidebar label translation: added `workspace_dashboard` EN/AR key and DLux discovery regression for `common:workspace_dashboard` → `Workspace` / `مساحة العمل`.
   - [x] (v0.5.0) Shop-builder sidebar/write endpoint hardening: `mutation_endpoint` still mutates only on POST, passive GET/HEAD returns 204, browser-style GET navigation redirects to `/staff/shop-builder/`, discovery exposes only `public_catalog_staff:builder`; active public_catalog migrations stay single-file because app is unreleased. Tests cover discovery/navigation.
@@ -63,7 +65,7 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [x] (v0.1.3-v0.1.5) Caddy edge + portfolio split, composer-updater topology, dashboard rates, customer/deposit comboboxes, translated filters/choices/permissions, seed demo.
 
 ### One-line info about last verified Tests:
-2026-07-12: Public catalog migration squash verified — `check`, `makemigrations --check`, `migrate --plan`, builder tests 10, public_catalog tests 19, full suite 157 pass, `git diff --check` clean; workspace + builder label focused tests passed.
+2026-07-13: Homepage Builder — `check`, `makemigrations --check` (none), homepage tests 8 + full suite 166 pass, `git diff --check` clean; verified builder renders, save persists hero/accent/section-order, landing reflects config, staff `?preview=1` bypasses offline 503, GET save→204.
 
 ### One-line info about last time edited Docs:
 CHANGELOG.md — added workspace and public catalog builder sidebar label translation notes; docs unchanged for translation-only fixes.

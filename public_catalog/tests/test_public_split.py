@@ -105,7 +105,7 @@ class PublicStaffSplitTests(TestCase):
             self.assertEqual(response.status_code, 200, path)
             html = response.content.decode()
             self.assertIn("public-shell", html)
-            self.assertIn("public_catalog/css/public_catalog.css?v=20260712b", html)
+            self.assertIn("public_catalog/css/public_catalog.css?v=20260712c", html)
             self.assertIn("public_catalog/js/public_catalog.js?v=20260712b", html)
             self.assertIn('data-public-modal-size="fullscreen"', html)
             self.assertNotIn("Staff sign in", html)

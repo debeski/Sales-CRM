@@ -9,8 +9,11 @@ from django.utils import timezone
 from django.views.generic import DetailView, TemplateView
 
 from .forms import PublicContactForm
+from .homepage import get_homepage_config, resolve_sections
 from .models import PublicCatalogListing, PublicContactMessage
 from .settings import contact_links, get_public_catalog_config
+
+HOMEPAGE_PREVIEW_PERM = "public_catalog.view_publiccataloglisting"
 
 
 def _public_listings():
@@ -30,12 +33,35 @@ def _listing_counts(listings):
     }
 
 
+def _is_staff_preview(request):
+    """Authed staff can preview the storefront (even when it is offline) via
+    ?preview=1 — used by the homepage builder's live preview iframe."""
+    return (
+        request.GET.get("preview") == "1"
+        and request.user.is_authenticated
+        and request.user.has_perm(HOMEPAGE_PREVIEW_PERM)
+    )
+
+
 class _StorefrontGateMixin:
     def dispatch(self, request, *args, **kwargs):
         cfg = get_public_catalog_config()
-        if not cfg.get("storefront_enabled", True):
+        if not cfg.get("storefront_enabled", True) and not _is_staff_preview(request):
             return render(request, "public_catalog/coming_soon.html", {"public_config": cfg}, status=503)
         return super().dispatch(request, *args, **kwargs)
+
+
+def _homepage_category_tiles(listings):
+    tiles = {}
+    for listing in listings:
+        if listing.source_kind != "product":
+            continue
+        category = listing.product.category if listing.product_id else None
+        if category is None:
+            continue
+        entry = tiles.setdefault(category.pk, {"name": category.name, "count": 0})
+        entry["count"] += 1
+    return sorted(tiles.values(), key=lambda t: (-t["count"], t["name"]))
 
 
 class PublicLandingView(_StorefrontGateMixin, TemplateView):
@@ -44,14 +70,21 @@ class PublicLandingView(_StorefrontGateMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         cfg = get_public_catalog_config()
+        home = get_homepage_config()
         limit = cfg.get("featured_limit") or 4
         listings = _public_listings()
         featured = [listing for listing in listings if listing.is_featured][:limit]
         hero_listing = (featured or listings[:1] or [None])[0]
+        services = [listing for listing in listings if listing.source_kind == "service"]
         ctx.update({
             "public_config": cfg,
+            "homepage_config": home,
+            "homepage_sections": [s for s in resolve_sections(home) if s["enabled"]],
+            "public_accent": home.get("accent"),
             "hero_listing": hero_listing,
             "featured_listings": featured or listings[:limit],
+            "service_listings": services[:8],
+            "category_tiles": _homepage_category_tiles(listings)[:8],
             "listing_counts": _listing_counts(listings),
             "contact_links": contact_links(),
         })
