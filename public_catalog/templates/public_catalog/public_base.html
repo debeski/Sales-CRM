@@ -14,14 +14,21 @@
     <link rel="stylesheet" href="{% static 'bootstrap/bootstrap-icons.css' %}">
     <link rel="stylesheet" href="{% static 'dlux/main/css/main.css' %}">
     <link rel="stylesheet" href="{% static 'dlux/main/css/buttons.css' %}">
-    <link rel="stylesheet" href="{% static 'public_catalog/css/public_catalog.css' %}?v=20260714d">
+    <link rel="stylesheet" href="{% static 'public_catalog/css/public_catalog.css' %}?v=20260714k">
     <link rel="icon" href="{{ APP_CONFIG.favicon_url|default:'/static/img/base_logo.svg' }}">
     <meta name="csrf-token" content="{{ csrf_token }}">
-    {% if public_accent %}<style>.public-shell{--public-accent:{{ public_accent }};}</style>{% endif %}
+    {% if public_accent or public_accent_secondary %}
+    <style>
+        .public-shell {
+            {% if public_accent %}--public-accent:{{ public_accent }};{% endif %}
+            {% if public_accent_secondary %}--public-accent-2:{{ public_accent_secondary }};{% endif %}
+        }
+    </style>
+    {% endif %}
     {% block extra_head %}{% endblock %}
 </head>
 <body>
-<main class="public-shell{% if public_bare %} public-shell--bare{% endif %}">
+<main class="public-shell {{ public_shell_classes|default:'public-style--signature public-bg--clean public-nav--glass public-cardstyle--showcase public-density--comfortable public-motion--subtle' }}{% if public_bare %} public-shell--bare{% endif %}">
     {% if not public_bare %}
     <header class="public-nav">
         <a class="public-brand" href="{% url 'public_catalog:landing' %}">
@@ -81,7 +88,7 @@
     </div>
 </div>
 <script src="{% static 'dlux/helpers/dynamic_modal/js/main.js' %}" nonce="{{ request.csp_nonce }}" defer></script>
-<script src="{% static 'public_catalog/js/public_catalog.js' %}?v=20260714a" nonce="{{ request.csp_nonce }}" defer></script>
+<script src="{% static 'public_catalog/js/public_catalog.js' %}?v=20260714k" nonce="{{ request.csp_nonce }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

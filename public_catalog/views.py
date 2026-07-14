@@ -99,11 +99,10 @@ class PublicLandingView(_StorefrontGateMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         cfg = get_public_catalog_config()
-        # Language: the visitor's active language; staff preview can force one via ?hl=.
-        lang = None
-        if _is_staff_preview(self.request):
-            lang = self.request.GET.get("hl") or None
-        home = resolve_homepage(lang=lang or get_current_language_code(self.request))
+        # The homepage renders in the visitor's active language. The builder's
+        # preview iframe switches the whole page (including the header) with ?lang=,
+        # so we resolve against that same active language — no separate override.
+        home = resolve_homepage(lang=get_current_language_code(self.request))
         limit = cfg.get("featured_limit") or 4
         listings = _public_listings()
         featured = [listing for listing in listings if listing.is_featured][:limit]
@@ -119,11 +118,25 @@ class PublicLandingView(_StorefrontGateMixin, TemplateView):
         else:
             hero_slides = []
 
+        hero_layout = home.get("hero_layout") or "poster"
+        if hero_layout == "mosaic" and len(hero_slides) < 2:
+            hero_layout = "poster"
+
         ctx.update({
             "public_config": cfg,
             "homepage_config": home,
             "homepage_sections": [s for s in resolve_sections(home) if s["enabled"]],
             "public_accent": home.get("accent"),
+            "public_accent_secondary": home.get("accent_secondary"),
+            "public_shell_classes": (
+                f"public-style--{home.get('style_preset') or 'signature'} "
+                f"public-bg--{home.get('background_treatment') or 'clean'} "
+                f"public-nav--{home.get('nav_treatment') or 'glass'} "
+                f"public-cardstyle--{home.get('card_treatment') or 'showcase'} "
+                f"public-density--{home.get('section_density') or 'comfortable'} "
+                f"public-motion--{home.get('motion_level') or 'subtle'}"
+            ),
+            "hero_layout": hero_layout,
             "hero_listing": hero_listing,
             "hero_slides": hero_slides,
             "featured_listings": featured or listings[:limit],

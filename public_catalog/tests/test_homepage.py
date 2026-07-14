@@ -23,15 +23,17 @@ class HomepageConfigTests(TestCase):
 
     def test_normalize_sections_drops_unknown_and_appends_new(self):
         result = normalize_sections([
-            {"key": "contact", "enabled": False},
+            {"key": "contact", "enabled": False, "variant": "compact"},
             {"key": "bogus", "enabled": True},
-            {"key": "featured", "enabled": True},
+            {"key": "featured", "enabled": True, "variant": "not-real"},
         ])
         keys = [s["key"] for s in result]
         # stored order first (known keys), then remaining defaults appended
         self.assertEqual(keys[:2], ["contact", "featured"])
         self.assertEqual(set(keys), {"featured", "categories", "services", "story", "contact"})
         self.assertFalse(result[0]["enabled"])  # contact stayed disabled
+        self.assertEqual(result[0]["variant"], "compact")
+        self.assertEqual(result[1]["variant"], "grid")  # bad variant fell back
 
     def test_localized_fields_store_per_language_and_resolve_with_fallback(self):
         cfg = set_homepage_config({"hero_title": {"en": "Secure space", "ar": "مساحة"}})
@@ -46,12 +48,50 @@ class HomepageConfigTests(TestCase):
         self.assertEqual(localize(cfg["hero_subtitle"], "en", "en"), "Legacy string")
 
     def test_accent_and_overlay_are_sanitised(self):
-        cfg = set_homepage_config({"accent": "0EA5E9", "hero_overlay": "250"})
+        cfg = set_homepage_config({"accent": "0EA5E9", "accent_secondary": "14B8A6", "hero_overlay": "250"})
         self.assertEqual(cfg["accent"], "#0ea5e9")
+        self.assertEqual(cfg["accent_secondary"], "#14b8a6")
         self.assertEqual(cfg["hero_overlay"], 100)
-        cfg = set_homepage_config({"accent": "not-a-color", "hero_overlay": "-5"})
+        cfg = set_homepage_config({"accent": "not-a-color", "accent_secondary": "not-a-color", "hero_overlay": "-5"})
         self.assertEqual(cfg["accent"], "")
+        self.assertEqual(cfg["accent_secondary"], "")
         self.assertEqual(cfg["hero_overlay"], 0)
+
+    def test_visual_choice_fields_fall_back_to_defaults(self):
+        cfg = set_homepage_config({
+            "style_preset": "showroom",
+            "hero_layout": "mosaic",
+            "hero_height": "immersive",
+            "hero_focus": "right",
+            "nav_treatment": "solid",
+            "card_treatment": "spec",
+            "section_density": "compact",
+            "background_treatment": "linework",
+            "motion_level": "none",
+        })
+        self.assertEqual(cfg["style_preset"], "showroom")
+        self.assertEqual(cfg["hero_layout"], "mosaic")
+        self.assertEqual(cfg["motion_level"], "none")
+        cfg = set_homepage_config({
+            "style_preset": "wrong",
+            "hero_layout": "wrong",
+            "hero_height": "wrong",
+            "hero_focus": "wrong",
+            "nav_treatment": "wrong",
+            "card_treatment": "wrong",
+            "section_density": "wrong",
+            "background_treatment": "wrong",
+            "motion_level": "wrong",
+        })
+        self.assertEqual(cfg["style_preset"], "signature")
+        self.assertEqual(cfg["hero_layout"], "poster")
+        self.assertEqual(cfg["hero_height"], "balanced")
+        self.assertEqual(cfg["hero_focus"], "center")
+        self.assertEqual(cfg["nav_treatment"], "glass")
+        self.assertEqual(cfg["card_treatment"], "showcase")
+        self.assertEqual(cfg["section_density"], "comfortable")
+        self.assertEqual(cfg["background_treatment"], "clean")
+        self.assertEqual(cfg["motion_level"], "subtle")
 
 
 class HomepageBuilderViewTests(TestCase):
@@ -78,6 +118,11 @@ class HomepageBuilderViewTests(TestCase):
         self.assertIn("data-hpb-frame", html)
         self.assertIn("data-hpb-sections", html)
         self.assertIn("preview=1", html)
+        self.assertIn("preview=1&lang=", html)
+        self.assertIn('name="style_preset"', html)
+        self.assertIn("data-section-variant", html)
+        self.assertIn('data-viewport="tablet"', html)
+        self.assertNotIn("dlux_app_settings_modal", html)
 
     def test_save_persists_localized_hero_accent_and_section_order(self):
         resp = self.client.post(reverse("public_catalog_staff:homepage_save"), {
@@ -85,9 +130,19 @@ class HomepageBuilderViewTests(TestCase):
             "hero_title__ar": "مساحة آمنة",
             "hero_media": "gradient",
             "hero_overlay": "70",
+            "style_preset": "precision",
+            "hero_layout": "center",
+            "hero_height": "compact",
+            "hero_focus": "top",
+            "nav_treatment": "quiet",
+            "card_treatment": "minimal",
+            "section_density": "compact",
+            "background_treatment": "grid",
+            "motion_level": "none",
             "accent": "#0ea5e9",
+            "accent_secondary": "#14b8a6",
             "featured_heading__en": "Our picks",
-            "sections": '[{"key":"story","enabled":true},{"key":"featured","enabled":true}]',
+            "sections": '[{"key":"story","enabled":true,"variant":"banner"},{"key":"featured","enabled":true,"variant":"rail"}]',
         })
         self.assertEqual(resp.status_code, 200)
         cfg = get_homepage_config()
@@ -96,20 +151,53 @@ class HomepageBuilderViewTests(TestCase):
         self.assertEqual(cfg["featured_heading"]["en"], "Our picks")
         self.assertEqual(cfg["hero_media"], "gradient")
         self.assertEqual(cfg["hero_overlay"], 70)
+        self.assertEqual(cfg["style_preset"], "precision")
+        self.assertEqual(cfg["hero_layout"], "center")
+        self.assertEqual(cfg["hero_height"], "compact")
+        self.assertEqual(cfg["hero_focus"], "top")
+        self.assertEqual(cfg["nav_treatment"], "quiet")
+        self.assertEqual(cfg["card_treatment"], "minimal")
+        self.assertEqual(cfg["section_density"], "compact")
+        self.assertEqual(cfg["background_treatment"], "grid")
+        self.assertEqual(cfg["motion_level"], "none")
         self.assertEqual(cfg["accent"], "#0ea5e9")
+        self.assertEqual(cfg["accent_secondary"], "#14b8a6")
         self.assertEqual([s["key"] for s in cfg["sections"]][:2], ["story", "featured"])
+        self.assertEqual(cfg["sections"][0]["variant"], "banner")
+        self.assertEqual(cfg["sections"][1]["variant"], "rail")
 
     def test_landing_reflects_config(self):
         set_homepage_config({
             "hero_title": "Secure your space", "hero_media": "gradient",
-            "accent": "#0ea5e9", "story_heading": "Who we are",
-            "sections": [{"key": "story", "enabled": True}, {"key": "featured", "enabled": True}],
+            "style_preset": "showroom", "hero_layout": "center", "hero_height": "immersive",
+            "hero_focus": "bottom", "nav_treatment": "solid", "card_treatment": "spec",
+            "section_density": "compact", "background_treatment": "diagonal", "motion_level": "lively",
+            "accent": "#0ea5e9", "accent_secondary": "#14b8a6", "story_heading": "Who we are",
+            "sections": [{"key": "story", "enabled": True, "variant": "banner"}, {"key": "featured", "enabled": True, "variant": "rail"}],
         })
         html = self.client.get(reverse("public_catalog:landing")).content.decode()
         self.assertIn("Secure your space", html)
         self.assertIn("--public-accent:#0ea5e9", html)
+        self.assertIn("--public-accent-2:#14b8a6", html)
+        self.assertIn("public-style--showroom", html)
+        self.assertIn("public-bg--diagonal", html)
+        self.assertIn("public-nav--solid", html)
+        self.assertIn("public-cardstyle--spec", html)
+        self.assertIn("public-density--compact", html)
+        self.assertIn("public-motion--lively", html)
         self.assertIn("public-hero--gradient", html)
+        self.assertIn("public-hero-layout--center", html)
+        self.assertIn("public-hero-height--immersive", html)
+        self.assertIn("public-hero-focus--bottom", html)
+        self.assertIn("public-story--banner", html)
+        self.assertIn("public-card-grid--rail", html)
         self.assertIn("Who we are", html)
+
+    def test_mosaic_hero_falls_back_without_multiple_images(self):
+        set_homepage_config({"hero_layout": "mosaic", "hero_media": "custom", "hero_image": "/media/one.jpg"})
+        html = self.client.get(reverse("public_catalog:landing")).content.decode()
+        self.assertIn("public-hero-layout--poster", html)
+        self.assertNotIn("public-hero-layout--mosaic", html)
 
     def test_public_language_toggle_switches_landing_content(self):
         set_homepage_config({"hero_title": {"en": "Secure space", "ar": "مساحة آمنة"}})
@@ -126,7 +214,7 @@ class HomepageBuilderViewTests(TestCase):
         anon = Client()
         landing = anon.get(reverse("public_catalog:landing"))
         self.assertEqual(landing.status_code, 503)
-        self.assertNotIn("public-nav", landing.content.decode())  # bare coming-soon, no header bar
+        self.assertNotIn('<header class="public-nav"', landing.content.decode())  # bare coming-soon, no header bar
         self.assertEqual(anon.get(reverse("public_catalog:landing") + "?preview=1").status_code, 503)
         # authed staff with permission may preview the offline homepage
         self.assertEqual(self.client.get(reverse("public_catalog:landing") + "?preview=1").status_code, 200)

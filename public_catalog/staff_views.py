@@ -256,7 +256,7 @@ class PublicHomepageBuilderView(LoginRequiredMixin, PermissionRequiredMixin, Tem
     def get_context_data(self, **kwargs):
         from common.i18n import t
         from .homepage import (
-            HOMEPAGE_NS, builder_sections, get_homepage_config, get_public_languages,
+            builder_sections, get_homepage_config, get_public_languages,
         )
 
         ctx = super().get_context_data(**kwargs)
@@ -264,6 +264,12 @@ class PublicHomepageBuilderView(LoginRequiredMixin, PermissionRequiredMixin, Tem
         languages, default_lang = get_public_languages()
         active = ctx.get("CURRENT_LANG") or self.request.session.get("lang") or default_lang
         codes = [c for c, _l in languages]
+        def choices(items):
+            return [
+                {"value": value, "icon": icon, "label": t(label_key, fallback)}
+                for value, icon, label_key, fallback in items
+            ]
+
         ctx.update({
             "homepage_config": cfg,
             "public_config": get_public_catalog_config(),
@@ -271,14 +277,63 @@ class PublicHomepageBuilderView(LoginRequiredMixin, PermissionRequiredMixin, Tem
             "homepage_languages": languages,
             "homepage_default_lang": default_lang,
             "homepage_active_lang": active if active in codes else default_lang,
-            "homepage_settings_ns": HOMEPAGE_NS,
             "hero_media_choices": [
                 ("featured", t("hp_media_featured", "Featured image")),
                 ("logo", t("hp_media_logo", "Logo")),
                 ("custom", t("hp_media_custom", "Custom image")),
                 ("gradient", t("hp_media_gradient", "Gradient")),
             ],
+            "style_preset_choices": choices([
+                ("signature", "bi-stars", "hp_style_signature", "Signature"),
+                ("showroom", "bi-shop-window", "hp_style_showroom", "Showroom"),
+                ("precision", "bi-rulers", "hp_style_precision", "Precision"),
+                ("editorial", "bi-layout-text-window-reverse", "hp_style_editorial", "Editorial"),
+            ]),
+            "hero_layout_choices": choices([
+                ("poster", "bi-window-fullscreen", "hp_hero_layout_poster", "Poster"),
+                ("center", "bi-align-center", "hp_hero_layout_center", "Center"),
+                ("mosaic", "bi-grid-3x3-gap", "hp_hero_layout_mosaic", "Mosaic"),
+                ("compact", "bi-window", "hp_hero_layout_compact", "Compact"),
+            ]),
+            "hero_height_choices": choices([
+                ("balanced", "bi-aspect-ratio", "hp_hero_height_balanced", "Balanced"),
+                ("immersive", "bi-arrows-fullscreen", "hp_hero_height_immersive", "Immersive"),
+                ("compact", "bi-arrows-collapse", "hp_hero_height_compact", "Compact"),
+            ]),
+            "hero_focus_choices": choices([
+                ("center", "bi-bullseye", "hp_focus_center", "Center"),
+                ("top", "bi-arrow-up", "hp_focus_top", "Top"),
+                ("bottom", "bi-arrow-down", "hp_focus_bottom", "Bottom"),
+                ("left", "bi-arrow-left", "hp_focus_left", "Left"),
+                ("right", "bi-arrow-right", "hp_focus_right", "Right"),
+            ]),
+            "nav_treatment_choices": choices([
+                ("glass", "bi-back", "hp_nav_glass", "Glass"),
+                ("solid", "bi-square-fill", "hp_nav_solid", "Solid"),
+                ("quiet", "bi-border-width", "hp_nav_quiet", "Quiet"),
+            ]),
+            "card_treatment_choices": choices([
+                ("showcase", "bi-card-image", "hp_card_showcase", "Showcase"),
+                ("spec", "bi-list-check", "hp_card_spec", "Spec"),
+                ("minimal", "bi-dash-square", "hp_card_minimal", "Minimal"),
+            ]),
+            "section_density_choices": choices([
+                ("comfortable", "bi-layout-three-columns", "hp_density_comfortable", "Comfortable"),
+                ("compact", "bi-distribute-vertical", "hp_density_compact", "Compact"),
+            ]),
+            "background_treatment_choices": choices([
+                ("clean", "bi-circle", "hp_bg_clean", "Clean"),
+                ("grid", "bi-grid", "hp_bg_grid", "Grid"),
+                ("diagonal", "bi-slash-lg", "hp_bg_diagonal", "Diagonal"),
+                ("linework", "bi-bezier2", "hp_bg_linework", "Linework"),
+            ]),
+            "motion_level_choices": choices([
+                ("subtle", "bi-wind", "hp_motion_subtle", "Subtle"),
+                ("none", "bi-pause-circle", "hp_motion_none", "None"),
+                ("lively", "bi-lightning-charge", "hp_motion_lively", "Lively"),
+            ]),
             "accent_presets": ["#345b86", "#0ea5e9", "#16a34a", "#dc2626", "#9333ea", "#f59e0b", "#0f172a"],
+            "accent_secondary_presets": ["#14b8a6", "#f97316", "#84cc16", "#e11d48", "#8b5cf6", "#64748b", "#111827"],
             "can_edit": self.request.user.has_perm(EDIT_PERM),
         })
         return ctx

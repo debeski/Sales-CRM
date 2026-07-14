@@ -25,6 +25,10 @@
         var slides = Array.prototype.slice.call(hero.querySelectorAll(".public-hero__slide"));
         var dots = Array.prototype.slice.call(hero.querySelectorAll("[data-hero-dots] button"));
         if (slides.length < 2) return;
+        var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        var motion = hero.getAttribute("data-motion-level") || "subtle";
+        var autoplay = motion !== "none" && !reducedMotion;
+        var intervalMs = motion === "lively" ? 4200 : 5500;
         var index = 0;
         var timer = null;
 
@@ -33,7 +37,11 @@
             slides.forEach(function (s, i) { s.classList.toggle("is-active", i === index); });
             dots.forEach(function (d, i) { d.classList.toggle("is-active", i === index); });
         }
-        function start() { stop(); timer = setInterval(function () { show(index + 1); }, 5500); }
+        function start() {
+            stop();
+            if (!autoplay) return;
+            timer = setInterval(function () { show(index + 1); }, intervalMs);
+        }
         function stop() { if (timer) { clearInterval(timer); timer = null; } }
 
         dots.forEach(function (dot, i) {

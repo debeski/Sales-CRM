@@ -65,20 +65,39 @@ write endpoints never mutate on GET: passive probes return 204 and direct browse
 navigation redirects back to `/staff/shop-builder/`. They are marked
 `sidebar_exclude=True` so only `public_catalog_staff:builder` is discoverable for
 sidebar navigation. Global config lives in the DLux app-settings namespace
-`switch_pos.public_catalog`
-(`storefront_enabled`, `featured_limit`, shop title/subtitle, contact fields, default
-show-price/availability); when `storefront_enabled` is off the public views return a
-`coming_soon.html` page with HTTP 503 — except staff with `view_publiccataloglisting`,
-who may preview the storefront while offline via `?preview=1`.
+`switch_pos.public_catalog`: the builders own the live toggles and featured limit,
+while the remaining DLux Options tile exposes only shop identity, contact endpoints,
+and new-listing show-price/show-availability defaults. When `shop_enabled` is off
+the public shop/detail/modal views return `coming_soon.html` with HTTP 503 — except
+staff with `view_publiccataloglisting`, who may preview the storefront while offline
+via `?preview=1`.
 
 The **public landing page** is composed from the Homepage Builder
 (`/staff/shop-builder/homepage/`), a live-preview-iframe editor whose config lives in
 its own app-settings namespace `switch_pos.public_homepage` (`public_catalog/homepage.py`:
-hero copy/CTA/background mode/overlay, an accent colour, and an ordered, toggleable list
-of sections — featured, categories, services, story, contact). `PublicLandingView` and
-`landing.html` are fully driven by that config; the accent injects a `--public-accent`
-CSS variable into `public_base.html`. Its `homepage_save` endpoint shares the same
-POST-only `mutation_endpoint` + `sidebar_exclude` treatment as the catalog builder.
+hero copy/CTA/background mode/overlay, primary and secondary accent colours, visual
+style preset, hero layout/height/focus, nav/card/density/background/motion treatments,
+and an ordered, toggleable list of sections — featured, categories, services, story,
+contact). Section config preserves a per-section `variant` (`grid`/`rail`,
+`tiles`/`chips`, `split`/`banner`, `band`/`compact`) alongside `key` and `enabled`.
+The `style_preset` is a broad art direction that changes page-level geometry,
+typography, spacing, and surface treatment (`signature` brand stroke, `showroom`
+image-forward display, `precision` flat technical surfaces, `editorial` text-led
+serif rhythm); narrower controls such as `card_treatment` and
+`background_treatment` then tune individual systems inside that direction. The
+`grid` background is CSS-only sparse connected circuit linework, with missing
+borders and light theme-aware opacity; `linework` uses stacked thin-angle CSS
+gradients to create a denser drawn-rule field without external assets.
+`PublicLandingView` and `landing.html` are fully driven by that config; the accents
+inject `--public-accent` and `--public-accent-2` CSS variables into `public_base.html`,
+and the rest emits class hooks consumed by `public_catalog.css`. Its `homepage_save`
+endpoint shares the same POST-only `mutation_endpoint` + `sidebar_exclude` treatment
+as the catalog builder. The Homepage Builder is the only UI surface for homepage
+copy, sections, visual style, and the homepage live toggle; its config still persists
+under `SystemSettings.extra_config['app']['switch_pos.public_homepage']` for backups
+and settings exports. If `shop_enabled` is off while `homepage_enabled` remains on,
+homepage listing cards may still appear as public teasers, but they do not render
+item-detail links or the Quick view item-modal button.
 
 `PublicContactMessage` is the first public write path. Contact form posts carry a
 stable hidden idempotency key enforced by a database unique constraint; repeated

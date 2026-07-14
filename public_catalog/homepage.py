@@ -16,15 +16,45 @@ HOMEPAGE_NS = "switch_pos.public_homepage"
 # Order matters: this is the default section order on a fresh install.
 SECTION_KEYS = ("featured", "categories", "services", "story", "contact")
 
+SECTION_VARIANTS = {
+    "featured": ("grid", "rail"),
+    "categories": ("tiles", "chips"),
+    "services": ("grid", "rail"),
+    "story": ("split", "banner"),
+    "contact": ("band", "compact"),
+}
+
 DEFAULT_SECTIONS = [
-    {"key": "featured", "enabled": True},
-    {"key": "categories", "enabled": False},
-    {"key": "services", "enabled": False},
-    {"key": "story", "enabled": False},
-    {"key": "contact", "enabled": True},
+    {"key": "featured", "enabled": True, "variant": "grid"},
+    {"key": "categories", "enabled": False, "variant": "tiles"},
+    {"key": "services", "enabled": False, "variant": "grid"},
+    {"key": "story", "enabled": False, "variant": "split"},
+    {"key": "contact", "enabled": True, "variant": "band"},
 ]
 
 HERO_MEDIA_MODES = ("featured", "logo", "custom", "gradient")
+STYLE_PRESETS = ("signature", "showroom", "precision", "editorial")
+HERO_LAYOUTS = ("poster", "center", "mosaic", "compact")
+HERO_HEIGHTS = ("balanced", "immersive", "compact")
+HERO_FOCUS = ("center", "top", "bottom", "left", "right")
+NAV_TREATMENTS = ("glass", "solid", "quiet")
+CARD_TREATMENTS = ("showcase", "spec", "minimal")
+SECTION_DENSITIES = ("comfortable", "compact")
+BACKGROUND_TREATMENTS = ("clean", "grid", "diagonal", "linework")
+MOTION_LEVELS = ("subtle", "none", "lively")
+
+CHOICE_FIELDS = {
+    "hero_media": HERO_MEDIA_MODES,
+    "style_preset": STYLE_PRESETS,
+    "hero_layout": HERO_LAYOUTS,
+    "hero_height": HERO_HEIGHTS,
+    "hero_focus": HERO_FOCUS,
+    "nav_treatment": NAV_TREATMENTS,
+    "card_treatment": CARD_TREATMENTS,
+    "section_density": SECTION_DENSITIES,
+    "background_treatment": BACKGROUND_TREATMENTS,
+    "motion_level": MOTION_LEVELS,
+}
 
 # Text fields stored as {lang_code: value} dicts.
 LOCALIZED_KEYS = (
@@ -48,8 +78,19 @@ HOMEPAGE_DEFAULTS = {
     "hero_image": "",            # media url when hero_media == custom
     "hero_overlay": 55,          # 0-100 scrim strength
     "show_stats": True,
-    # Site accent (blank -> theme default)
+    # Visual studio
+    "style_preset": "signature",
+    "hero_layout": "poster",
+    "hero_height": "balanced",
+    "hero_focus": "center",
+    "nav_treatment": "glass",
+    "card_treatment": "showcase",
+    "section_density": "comfortable",
+    "background_treatment": "clean",
+    "motion_level": "subtle",
+    # Site accents (blank -> theme default)
     "accent": "",
+    "accent_secondary": "",
     # Per-section copy (localized)
     "featured_kicker": "Featured catalog",
     "featured_heading": "Ready for customer viewing",
@@ -110,12 +151,20 @@ def _clamp_overlay(value):
 def normalize_sections(stored):
     """Return a clean [{key, enabled}] list: stored order first (deduped, known
     keys only), then any newly-added default sections appended."""
+    defaults = {section["key"]: section for section in DEFAULT_SECTIONS}
     result, seen = [], set()
     if isinstance(stored, list):
         for item in stored:
             key = item.get("key") if isinstance(item, dict) else None
             if key in SECTION_KEYS and key not in seen:
-                result.append({"key": key, "enabled": bool(item.get("enabled", True))})
+                variant = item.get("variant") if isinstance(item, dict) else None
+                if variant not in SECTION_VARIANTS[key]:
+                    variant = defaults[key]["variant"]
+                result.append({
+                    "key": key,
+                    "enabled": bool(item.get("enabled", True)),
+                    "variant": variant,
+                })
                 seen.add(key)
     for default in DEFAULT_SECTIONS:
         if default["key"] not in seen:
@@ -147,9 +196,11 @@ def get_homepage_config():
     for key in _BOOL_KEYS:
         cfg[key] = bool(cfg.get(key))
     cfg["hero_overlay"] = _clamp_overlay(cfg.get("hero_overlay"))
-    if cfg.get("hero_media") not in HERO_MEDIA_MODES:
-        cfg["hero_media"] = HOMEPAGE_DEFAULTS["hero_media"]
+    for key, choices in CHOICE_FIELDS.items():
+        if cfg.get(key) not in choices:
+            cfg[key] = HOMEPAGE_DEFAULTS[key]
     cfg["accent"] = _sanitize_hex(cfg.get("accent"))
+    cfg["accent_secondary"] = _sanitize_hex(cfg.get("accent_secondary"))
     cfg["sections"] = normalize_sections(cfg.get("sections"))
     return cfg
 
@@ -168,8 +219,10 @@ def set_homepage_config(patch, *, request=None):
             cfg[key] = bool(value)
         elif key == "hero_overlay":
             cfg[key] = _clamp_overlay(value)
-        elif key == "accent":
+        elif key in ("accent", "accent_secondary"):
             cfg[key] = _sanitize_hex(value)
+        elif key in CHOICE_FIELDS:
+            cfg[key] = value if value in CHOICE_FIELDS[key] else HOMEPAGE_DEFAULTS[key]
         else:
             cfg[key] = value
     write_app_system_config(HOMEPAGE_NS, cfg, request=request)
@@ -201,6 +254,7 @@ def resolve_sections(flat_cfg=None):
             "key": key,
             "label": t(f"hp_section_{key}", key.capitalize()),
             "enabled": bool(section.get("enabled")),
+            "variant": section.get("variant") or DEFAULT_SECTIONS[SECTION_KEYS.index(key)]["variant"],
             "kicker": flat_cfg.get(f"{key}_kicker", ""),
             "heading": flat_cfg.get(f"{key}_heading", ""),
         })
@@ -213,12 +267,27 @@ def builder_sections(cfg=None):
 
     cfg = cfg or get_homepage_config()
     out = []
+    variant_labels = {
+        "grid": t("hp_variant_grid", "Grid"),
+        "rail": t("hp_variant_rail", "Rail"),
+        "tiles": t("hp_variant_tiles", "Tiles"),
+        "chips": t("hp_variant_chips", "Chips"),
+        "split": t("hp_variant_split", "Split"),
+        "banner": t("hp_variant_banner", "Banner"),
+        "band": t("hp_variant_band", "Band"),
+        "compact": t("hp_variant_compact", "Compact"),
+    }
     for section in cfg["sections"]:
         key = section["key"]
         out.append({
             "key": key,
             "label": t(f"hp_section_{key}", key.capitalize()),
             "enabled": bool(section.get("enabled")),
+            "variant": section.get("variant") or DEFAULT_SECTIONS[SECTION_KEYS.index(key)]["variant"],
+            "variants": [
+                {"value": variant, "label": variant_labels.get(variant, variant.capitalize())}
+                for variant in SECTION_VARIANTS[key]
+            ],
             "kicker": cfg.get(f"{key}_kicker", {}),
             "heading": cfg.get(f"{key}_heading", {}),
         })

@@ -108,9 +108,11 @@ language, theme). Health endpoint: `/health/`.
    **Feature** the best (drives the landing hero/strip, drag the grip to reorder),
    and **Customize** each listing (customer-safe public title/summary/body,
    optional image override, installation/warranty notes, and per-listing show
-   price/availability). The **Storefront live** switch and **Shop settings** (title,
-   subtitle, contacts, `featured_limit`) drive the `switch_pos.public_catalog`
-   system settings; turning the storefront off serves a coming-soon page (HTTP 503).
+   price/availability). The **Storefront live** switch and the builder settings
+   endpoint drive shop availability and featured count; the DLux **Shop settings**
+   modal is limited to shop title/subtitle, contact endpoints, and new-listing
+   price/availability defaults in `switch_pos.public_catalog`. Turning the storefront
+   off serves a coming-soon page (HTTP 503).
    Public pages show availability bands, not exact stock counts. The full-screen
    contact modal posts to `/contact/modal/`, saves a `PublicContactMessage` with an
    idempotency key, and emails the configured contact recipient when SMTP is valid.

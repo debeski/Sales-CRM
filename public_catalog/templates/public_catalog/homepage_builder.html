@@ -6,7 +6,7 @@
 
 {% block extra_head %}
 {{ block.super }}
-<link rel="stylesheet" href="{% static 'public_catalog/css/homepage_builder.css' %}?v=20260714b">
+<link rel="stylesheet" href="{% static 'public_catalog/css/homepage_builder.css' %}?v=20260714k">
 {% endblock %}
 
 {% block content %}
@@ -46,16 +46,148 @@
             <a class="btn btn-outline-secondary rounded-pill" href="{% url 'public_catalog:landing' %}" target="_blank" rel="noopener">
                 <i class="bi bi-box-arrow-up-right me-1"></i>{{ DLUX_STRINGS.hp_open_site|default:"Open live site" }}
             </a>
-            <button type="button" class="btn btn-primary rounded-pill"
-                    data-dynamic-modal="{% url 'dlux_app_settings_modal' homepage_settings_ns %}"
-                    data-modal-title="{{ DLUX_STRINGS.options_public_homepage|default:'Public homepage' }}">
-                <i class="bi bi-sliders me-1"></i>{{ DLUX_STRINGS.hp_settings|default:"Settings" }}
-            </button>
         </div>
     </header>
 
     <div class="hpb__grid">
         <form class="hpb__editor" data-hpb-form {% if not can_edit %}data-readonly{% endif %}>
+
+            <details class="hpb-panel hpb-panel--style" open>
+                <summary><i class="bi bi-palette2 me-2"></i>{{ DLUX_STRINGS.hp_panel_style|default:"Style" }}</summary>
+                <div class="hpb-panel__body">
+                    <div class="hpb-field">
+                        <span>{{ DLUX_STRINGS.hp_style_preset|default:"Style preset" }}</span>
+                        <div class="hpb-choice-grid hpb-choice-grid--4" role="radiogroup">
+                            {% for opt in style_preset_choices %}
+                            <label class="hpb-choice">
+                                <input type="radio" name="style_preset" value="{{ opt.value }}" {% if homepage_config.style_preset == opt.value %}checked{% endif %}>
+                                <span><i class="bi {{ opt.icon }}"></i><b>{{ opt.label }}</b></span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="hpb-field">
+                        <span>{{ DLUX_STRINGS.hp_hero_layout|default:"Hero layout" }}</span>
+                        <div class="hpb-choice-grid hpb-choice-grid--4" role="radiogroup">
+                            {% for opt in hero_layout_choices %}
+                            <label class="hpb-choice">
+                                <input type="radio" name="hero_layout" value="{{ opt.value }}" {% if homepage_config.hero_layout == opt.value %}checked{% endif %}>
+                                <span><i class="bi {{ opt.icon }}"></i><b>{{ opt.label }}</b></span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="hpb-field-row hpb-field-row--stack">
+                        <div class="hpb-field">
+                            <span>{{ DLUX_STRINGS.hp_hero_height|default:"Hero height" }}</span>
+                            <div class="hpb-choice-grid hpb-choice-grid--3" role="radiogroup">
+                                {% for opt in hero_height_choices %}
+                                <label class="hpb-choice hpb-choice--compact">
+                                    <input type="radio" name="hero_height" value="{{ opt.value }}" {% if homepage_config.hero_height == opt.value %}checked{% endif %}>
+                                    <span><i class="bi {{ opt.icon }}"></i><b>{{ opt.label }}</b></span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="hpb-field">
+                            <span>{{ DLUX_STRINGS.hp_hero_focus|default:"Image focus" }}</span>
+                            <div class="hpb-choice-grid hpb-choice-grid--5" role="radiogroup">
+                                {% for opt in hero_focus_choices %}
+                                <label class="hpb-choice hpb-choice--icon">
+                                    <input type="radio" name="hero_focus" value="{{ opt.value }}" {% if homepage_config.hero_focus == opt.value %}checked{% endif %}>
+                                    <span title="{{ opt.label }}"><i class="bi {{ opt.icon }}"></i></span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hpb-field-row hpb-field-row--stack">
+                        <div class="hpb-field">
+                            <span>{{ DLUX_STRINGS.hp_nav_treatment|default:"Navigation" }}</span>
+                            <div class="hpb-choice-grid hpb-choice-grid--3" role="radiogroup">
+                                {% for opt in nav_treatment_choices %}
+                                <label class="hpb-choice hpb-choice--compact">
+                                    <input type="radio" name="nav_treatment" value="{{ opt.value }}" {% if homepage_config.nav_treatment == opt.value %}checked{% endif %}>
+                                    <span><i class="bi {{ opt.icon }}"></i><b>{{ opt.label }}</b></span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="hpb-field">
+                            <span>{{ DLUX_STRINGS.hp_card_treatment|default:"Cards" }}</span>
+                            <div class="hpb-choice-grid hpb-choice-grid--3" role="radiogroup">
+                                {% for opt in card_treatment_choices %}
+                                <label class="hpb-choice hpb-choice--compact">
+                                    <input type="radio" name="card_treatment" value="{{ opt.value }}" {% if homepage_config.card_treatment == opt.value %}checked{% endif %}>
+                                    <span><i class="bi {{ opt.icon }}"></i><b>{{ opt.label }}</b></span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hpb-field">
+                        <span>{{ DLUX_STRINGS.hp_background_treatment|default:"Background" }}</span>
+                        <div class="hpb-choice-grid hpb-choice-grid--4" role="radiogroup">
+                            {% for opt in background_treatment_choices %}
+                            <label class="hpb-choice hpb-choice--compact">
+                                <input type="radio" name="background_treatment" value="{{ opt.value }}" {% if homepage_config.background_treatment == opt.value %}checked{% endif %}>
+                                <span><i class="bi {{ opt.icon }}"></i><b>{{ opt.label }}</b></span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="hpb-field-row hpb-field-row--stack">
+                        <div class="hpb-field">
+                            <span>{{ DLUX_STRINGS.hp_section_density|default:"Section density" }}</span>
+                            <div class="hpb-choice-grid hpb-choice-grid--2" role="radiogroup">
+                                {% for opt in section_density_choices %}
+                                <label class="hpb-choice hpb-choice--compact">
+                                    <input type="radio" name="section_density" value="{{ opt.value }}" {% if homepage_config.section_density == opt.value %}checked{% endif %}>
+                                    <span><i class="bi {{ opt.icon }}"></i><b>{{ opt.label }}</b></span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="hpb-field">
+                            <span>{{ DLUX_STRINGS.hp_motion_level|default:"Motion" }}</span>
+                            <div class="hpb-choice-grid hpb-choice-grid--3" role="radiogroup">
+                                {% for opt in motion_level_choices %}
+                                <label class="hpb-choice hpb-choice--compact">
+                                    <input type="radio" name="motion_level" value="{{ opt.value }}" {% if homepage_config.motion_level == opt.value %}checked{% endif %}>
+                                    <span><i class="bi {{ opt.icon }}"></i><b>{{ opt.label }}</b></span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hpb-accent-stack">
+                        <div class="hpb-accent">
+                            <span class="hpb-accent__label">{{ DLUX_STRINGS.hp_accent_primary|default:"Primary accent" }}</span>
+                            <input type="color" name="accent" value="{{ homepage_config.accent|default:'#345b86' }}" data-accent-input>
+                            <div class="hpb-swatches" data-accent-presets>
+                                {% for hex in accent_presets %}<button type="button" class="hpb-swatch" style="background:{{ hex }}" data-accent="{{ hex }}" title="{{ hex }}"></button>{% endfor %}
+                            </div>
+                            <button type="button" class="btn btn-sm btn-link" data-accent-reset>{{ DLUX_STRINGS.hp_accent_reset|default:"Use theme default" }}</button>
+                        </div>
+                        <div class="hpb-accent">
+                            <span class="hpb-accent__label">{{ DLUX_STRINGS.hp_accent_secondary|default:"Secondary accent" }}</span>
+                            <input type="color" name="accent_secondary" value="{{ homepage_config.accent_secondary|default:'#14b8a6' }}" data-accent-secondary-input>
+                            <div class="hpb-swatches" data-accent-secondary-presets>
+                                {% for hex in accent_secondary_presets %}<button type="button" class="hpb-swatch" style="background:{{ hex }}" data-accent-secondary="{{ hex }}" title="{{ hex }}"></button>{% endfor %}
+                            </div>
+                            <button type="button" class="btn btn-sm btn-link" data-accent-secondary-reset>{{ DLUX_STRINGS.hp_accent_secondary_reset|default:"Use paired default" }}</button>
+                        </div>
+                    </div>
+                    <input type="hidden" name="accent_enabled" value="{% if homepage_config.accent %}1{% else %}0{% endif %}" data-accent-enabled>
+                    <input type="hidden" name="accent_secondary_enabled" value="{% if homepage_config.accent_secondary %}1{% else %}0{% endif %}" data-accent-secondary-enabled>
+                </div>
+            </details>
 
             <details class="hpb-panel" open>
                 <summary><i class="bi bi-stars me-2"></i>{{ DLUX_STRINGS.hp_panel_hero|default:"Hero" }}</summary>
@@ -133,6 +265,16 @@
                                 </span>
                                 <label class="hpb-switch"><input type="checkbox" data-section-enabled {% if section.enabled %}checked{% endif %}>
                                     <span>{{ section.label }}</span></label>
+                                {% if section.variants|length > 1 %}
+                                <label class="hpb-section__variant">
+                                    <span>{{ DLUX_STRINGS.hp_section_variant|default:"Layout" }}</span>
+                                    <select data-section-variant>
+                                        {% for opt in section.variants %}
+                                        <option value="{{ opt.value }}" {% if section.variant == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </label>
+                                {% endif %}
                             </div>
                             <div class="hpb-section__fields">
                                 {% for code, lname in homepage_languages %}
@@ -157,32 +299,19 @@
                     </div>
                 </div>
             </details>
-
-            <details class="hpb-panel" open>
-                <summary><i class="bi bi-palette me-2"></i>{{ DLUX_STRINGS.hp_panel_accent|default:"Accent" }}</summary>
-                <div class="hpb-panel__body">
-                    <div class="hpb-accent">
-                        <input type="color" name="accent" value="{{ homepage_config.accent|default:'#345b86' }}" data-accent-input>
-                        <div class="hpb-swatches" data-accent-presets>
-                            {% for hex in accent_presets %}<button type="button" class="hpb-swatch" style="background:{{ hex }}" data-accent="{{ hex }}" title="{{ hex }}"></button>{% endfor %}
-                        </div>
-                        <button type="button" class="btn btn-sm btn-link" data-accent-reset>{{ DLUX_STRINGS.hp_accent_reset|default:"Use theme default" }}</button>
-                    </div>
-                    <input type="hidden" name="accent_enabled" value="{% if homepage_config.accent %}1{% else %}0{% endif %}" data-accent-enabled>
-                </div>
-            </details>
         </form>
 
         <div class="hpb__preview">
             <div class="hpb__preview-bar">
                 <div class="hpb__viewport">
                     <button type="button" data-viewport="desktop" class="is-active" title="Desktop"><i class="bi bi-display"></i></button>
+                    <button type="button" data-viewport="tablet" title="Tablet"><i class="bi bi-tablet-landscape"></i></button>
                     <button type="button" data-viewport="mobile" title="Mobile"><i class="bi bi-phone"></i></button>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" data-hpb-refresh><i class="bi bi-arrow-clockwise me-1"></i>{{ DLUX_STRINGS.hp_refresh|default:"Refresh" }}</button>
             </div>
             <div class="hpb__frame-wrap" data-frame-wrap>
-                <iframe data-hpb-frame src="{% url 'public_catalog:landing' %}?preview=1" title="{{ DLUX_STRINGS.hp_preview|default:'Preview' }}" loading="lazy"></iframe>
+                <iframe data-hpb-frame src="{% url 'public_catalog:landing' %}?preview=1&lang={{ homepage_active_lang }}" title="{{ DLUX_STRINGS.hp_preview|default:'Preview' }}" loading="lazy"></iframe>
             </div>
         </div>
     </div>
@@ -191,5 +320,5 @@
 
 {% block scripts %}
 {{ block.super }}
-<script src="{% static 'public_catalog/js/homepage_builder.js' %}?v=20260714b" nonce="{{ request.csp_nonce }}" defer></script>
+<script src="{% static 'public_catalog/js/homepage_builder.js' %}?v=20260714k" nonce="{{ request.csp_nonce }}" defer></script>
 {% endblock %}

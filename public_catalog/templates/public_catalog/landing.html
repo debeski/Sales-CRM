@@ -4,7 +4,10 @@
 {% block public_title %}{{ homepage_config.hero_title|default:public_config.shop_title }}{% endblock %}
 
 {% block public_content %}
-<section class="public-hero public-hero--{{ homepage_config.hero_media }}" style="--scrim:{{ homepage_config.hero_overlay }}"{% if hero_slides|length > 1 %} data-hero-carousel{% endif %}>
+<section class="public-hero public-hero--{{ homepage_config.hero_media }} public-hero-layout--{{ hero_layout|default:'poster' }} public-hero-height--{{ homepage_config.hero_height }} public-hero-focus--{{ homepage_config.hero_focus }}"
+         style="--scrim:{{ homepage_config.hero_overlay }}"
+         data-motion-level="{{ homepage_config.motion_level }}"
+         {% if hero_slides|length > 1 and hero_layout != 'mosaic' %}data-hero-carousel{% endif %}>
     {% if hero_slides %}
     <div class="public-hero__media">
         {% for src in hero_slides %}
@@ -41,7 +44,7 @@
             {% endif %}
         </div>
     </div>
-    {% if hero_slides|length > 1 %}
+    {% if hero_slides|length > 1 and hero_layout != 'mosaic' %}
     <div class="public-hero__dots" data-hero-dots>
         {% for src in hero_slides %}<button type="button" class="{% if forloop.first %}is-active{% endif %}" data-dot="{{ forloop.counter0 }}" aria-label="Slide {{ forloop.counter }}"></button>{% endfor %}
     </div>
@@ -50,7 +53,7 @@
 
 {% for section in homepage_sections %}
     {% if section.key == 'featured' and featured_listings %}
-    <section class="public-section" data-section="featured">
+    <section class="public-section public-section--featured public-section-variant--{{ section.variant }}" data-section="featured">
         <div class="public-section__head">
             <div>
                 {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
@@ -58,20 +61,20 @@
             </div>
             <a href="{% url 'public_catalog:shop' %}">{{ DLUX_STRINGS.hp_view_all|default:'View all' }}</a>
         </div>
-        <div class="public-card-grid public-card-grid--featured">
+        <div class="public-card-grid public-card-grid--featured public-card-grid--{{ section.variant }}">
             {% for listing in featured_listings %}{% include "public_catalog/_listing_card.html" %}{% endfor %}
         </div>
     </section>
 
     {% elif section.key == 'categories' and category_tiles %}
-    <section class="public-section" data-section="categories">
+    <section class="public-section public-section--categories public-section-variant--{{ section.variant }}" data-section="categories">
         <div class="public-section__head">
             <div>
                 {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
                 <h2>{{ section.heading }}</h2>
             </div>
         </div>
-        <div class="public-category-grid">
+        <div class="public-category-grid public-category-grid--{{ section.variant }}">
             {% for cat in category_tiles %}
             <a class="public-category" href="{% url 'public_catalog:shop' %}?kind=products&q={{ cat.name|urlencode }}">
                 <span class="public-category__name">{{ cat.name }}</span>
@@ -82,7 +85,7 @@
     </section>
 
     {% elif section.key == 'services' and service_listings %}
-    <section class="public-section" data-section="services">
+    <section class="public-section public-section--services public-section-variant--{{ section.variant }}" data-section="services">
         <div class="public-section__head">
             <div>
                 {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
@@ -90,13 +93,13 @@
             </div>
             <a href="{% url 'public_catalog:shop' %}?kind=services">{{ DLUX_STRINGS.hp_view_all|default:'View all' }}</a>
         </div>
-        <div class="public-card-grid">
+        <div class="public-card-grid public-card-grid--{{ section.variant }}">
             {% for listing in service_listings %}{% include "public_catalog/_listing_card.html" %}{% endfor %}
         </div>
     </section>
 
     {% elif section.key == 'story' %}
-    <section class="public-section public-story" data-section="story">
+    <section class="public-section public-story public-story--{{ section.variant }} public-section-variant--{{ section.variant }}" data-section="story">
         <div class="public-story__copy">
             {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
             <h2>{{ section.heading }}</h2>
@@ -108,7 +111,7 @@
     </section>
 
     {% elif section.key == 'contact' %}
-    <section class="public-contact" data-section="contact">
+    <section class="public-contact public-contact--{{ section.variant }} public-section-variant--{{ section.variant }}" data-section="contact">
         {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
         <h2>{{ section.heading }}</h2>
         <div class="public-actions">

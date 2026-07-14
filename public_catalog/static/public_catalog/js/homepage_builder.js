@@ -23,7 +23,9 @@
         statusEl.className = "hpb__status" + (kind ? " is-" + kind : "");
     }
     function reloadPreview() {
-        if (frame) frame.src = previewUrl + (activeLang ? "&hl=" + activeLang : "") + "&t=" + Date.now();
+        // Preview in the language being edited — ?lang= drives the WHOLE page
+        // (top bar, chrome and content), not just the homepage fields.
+        if (frame) frame.src = previewUrl + (activeLang ? "&lang=" + activeLang : "") + "&t=" + Date.now();
     }
 
     // Editing-language toggle: reveal that language's fields, preview in it.
@@ -42,7 +44,12 @@
         var out = [];
         root.querySelectorAll("[data-section-key]").forEach(function (row) {
             var toggle = row.querySelector("[data-section-enabled]");
-            out.push({ key: row.dataset.sectionKey, enabled: !!(toggle && toggle.checked) });
+            var variant = row.querySelector("[data-section-variant]");
+            out.push({
+                key: row.dataset.sectionKey,
+                enabled: !!(toggle && toggle.checked),
+                variant: variant ? variant.value : ""
+            });
         });
         return JSON.stringify(out);
     }
@@ -59,6 +66,8 @@
         // Accent: honour the "theme default" state.
         var accentEnabled = form.querySelector("[data-accent-enabled]");
         if (accentEnabled && accentEnabled.value === "0") fd.set("accent", "");
+        var accentSecondaryEnabled = form.querySelector("[data-accent-secondary-enabled]");
+        if (accentSecondaryEnabled && accentSecondaryEnabled.value === "0") fd.set("accent_secondary", "");
         // Files (only when freshly picked).
         var heroInput = form.querySelector("[data-hero-input]");
         if (heroInput && heroInput.files && heroInput.files[0]) fd.append("hero_image", heroInput.files[0]);
@@ -169,6 +178,23 @@
         if (accentEnabled) accentEnabled.value = "0";
         scheduleSave();
     });
+    var accentSecondaryInput = form.querySelector("[data-accent-secondary-input]");
+    var accentSecondaryEnabled = form.querySelector("[data-accent-secondary-enabled]");
+    root.querySelectorAll("[data-accent-secondary]").forEach(function (sw) {
+        sw.addEventListener("click", function () {
+            if (accentSecondaryInput) accentSecondaryInput.value = sw.dataset.accentSecondary;
+            if (accentSecondaryEnabled) accentSecondaryEnabled.value = "1";
+            scheduleSave();
+        });
+    });
+    if (accentSecondaryInput) accentSecondaryInput.addEventListener("input", function () {
+        if (accentSecondaryEnabled) accentSecondaryEnabled.value = "1";
+    });
+    var accentSecondaryReset = root.querySelector("[data-accent-secondary-reset]");
+    if (accentSecondaryReset) accentSecondaryReset.addEventListener("click", function () {
+        if (accentSecondaryEnabled) accentSecondaryEnabled.value = "0";
+        scheduleSave();
+    });
 
     // Preview controls.
     var frameWrap = root.querySelector("[data-frame-wrap]");
@@ -176,7 +202,11 @@
         btn.addEventListener("click", function () {
             root.querySelectorAll("[data-viewport]").forEach(function (b) { b.classList.remove("is-active"); });
             btn.classList.add("is-active");
-            if (frameWrap) frameWrap.classList.toggle("is-mobile", btn.dataset.viewport === "mobile");
+            if (frameWrap) {
+                frameWrap.classList.remove("is-tablet", "is-mobile");
+                if (btn.dataset.viewport === "tablet") frameWrap.classList.add("is-tablet");
+                if (btn.dataset.viewport === "mobile") frameWrap.classList.add("is-mobile");
+            }
         });
     });
     var refresh = root.querySelector("[data-hpb-refresh]");

@@ -1,5 +1,9 @@
 <article class="public-card public-card--{{ listing.source_kind }}">
+    {% if public_config.shop_enabled %}
     <a class="public-card__media" href="{{ listing.get_absolute_url }}">
+    {% else %}
+    <div class="public-card__media">
+    {% endif %}
         {% if listing.image_url %}
         <img src="{{ listing.image_url }}" alt="{{ listing.display_title }}">
         {% else %}
@@ -10,13 +14,23 @@
             {{ listing.availability_label }}
         </em>
         {% endif %}
+    {% if public_config.shop_enabled %}
     </a>
+    {% else %}
+    </div>
+    {% endif %}
     <div class="public-card__body">
         <div class="public-card__meta">
             <span>{{ listing.source_label }}</span>
             <span>{{ listing.source_kind }}</span>
         </div>
-        <h3><a href="{{ listing.get_absolute_url }}">{{ listing.display_title }}</a></h3>
+        <h3>
+            {% if public_config.shop_enabled %}
+            <a href="{{ listing.get_absolute_url }}">{{ listing.display_title }}</a>
+            {% else %}
+            <span>{{ listing.display_title }}</span>
+            {% endif %}
+        </h3>
         {% if listing.display_summary %}<p>{{ listing.display_summary|truncatechars:130 }}</p>{% endif %}
         <div class="public-card__facts">
             {% if public_config.show_price and listing.show_price %}
@@ -40,6 +54,7 @@
         </div>
         {% endif %}
     </div>
+    {% if public_config.shop_enabled %}
     <div class="public-card__actions">
         <a class="btn btn-sm btn-link public-card__link" href="{{ listing.get_absolute_url }}">View page</a>
         <button type="button"
@@ -49,4 +64,5 @@
             <i class="bi bi-arrows-angle-expand me-1"></i>Quick view
         </button>
     </div>
+    {% endif %}
 </article>

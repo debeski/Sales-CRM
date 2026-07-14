@@ -334,7 +334,7 @@ services:
   # needs the project mounted at the identical absolute path for bind mounts
   # (./media, ./logs, …) to resolve correctly (same pattern as composer start.sh).
   composer-updater:
-    image: debeski/composer:v1.1.7
+    image: debeski/composer:latest
     restart: unless-stopped
     working_dir: "${PWD}"
     command:

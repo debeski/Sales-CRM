@@ -2,7 +2,7 @@ import json
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 
 from catalog.models import Product, Service
@@ -12,6 +12,7 @@ from public_catalog.settings import get_public_catalog_config, set_public_catalo
 from .test_public_split import configure_dlux_public_split
 
 User = get_user_model()
+rf = RequestFactory()
 
 
 class PublicCatalogBuilderTests(TestCase):
@@ -35,6 +36,30 @@ class PublicCatalogBuilderTests(TestCase):
         self.assertIn("data-toggle-url", html)
         self.assertIn('data-kind="product"', html)
         self.assertIn('data-kind="service"', html)
+
+    def test_dlux_options_tiles_are_builder_focused(self):
+        from dlux import options
+        import public_catalog.dlux_options  # noqa: F401
+
+        req = rf.get("/staff/sys/options/")
+        req.user = self.admin
+        settings = {item["namespace"]: item for item in options.get_visible_app_settings(req)}
+
+        self.assertNotIn("switch_pos.public_homepage", settings)
+        self.assertIn("switch_pos.public_catalog", settings)
+        field_names = [field["name"] for field in settings["switch_pos.public_catalog"]["fields"]]
+        self.assertEqual(field_names, [
+            "shop_title",
+            "shop_subtitle",
+            "contact_phone",
+            "contact_whatsapp",
+            "contact_email",
+            "show_price",
+            "show_availability",
+        ])
+        self.assertNotIn("shop_enabled", field_names)
+        self.assertNotIn("homepage_enabled", field_names)
+        self.assertNotIn("featured_limit", field_names)
 
     def test_toggle_publish_creates_then_flips(self):
         url = reverse("public_catalog_staff:builder_toggle_publish")
@@ -103,7 +128,14 @@ class PublicCatalogBuilderTests(TestCase):
         self.assertEqual(cfg["featured_limit"], 6)
         anon = Client()
         self.assertEqual(anon.get(reverse("public_catalog:shop")).status_code, 503)
-        self.assertEqual(anon.get(reverse("public_catalog:landing")).status_code, 200)
+        listing = PublicCatalogListing.objects.create(product=self.product, is_published=True, is_featured=True)
+        landing = anon.get(reverse("public_catalog:landing"))
+        self.assertEqual(landing.status_code, 200)
+        landing_html = landing.content.decode()
+        self.assertIn("Smart Lock", landing_html)
+        self.assertNotIn(reverse("public_catalog:item_modal", args=[listing.slug]), landing_html)
+        self.assertNotIn(listing.get_absolute_url(), landing_html)
+        self.assertNotIn("Quick view", landing_html)
 
         # Now turn the HOMEPAGE off and the shop back on — they swap independently.
         self.client.post(reverse("public_catalog_staff:builder_settings"),
@@ -139,9 +171,9 @@ class PublicCatalogBuilderTests(TestCase):
         # (toggle-publish/update-listing/reorder/settings/homepage-save) are excluded.
         self.assertEqual(names, {"public_catalog_staff:builder", "public_catalog_staff:homepage_builder"})
         self.assertEqual(label(en_catalog, "public_catalog_staff:builder"), "Public Catalog Builder")
-        self.assertEqual(label(ar_catalog, "public_catalog_staff:builder"), "منشئ المتجر العام")
+        self.assertEqual(label(ar_catalog, "public_catalog_staff:builder"), "إدارة المتجر العام")
         self.assertEqual(label(en_catalog, "public_catalog_staff:homepage_builder"), "Homepage Builder")
-        self.assertEqual(label(ar_catalog, "public_catalog_staff:homepage_builder"), "منشئ الصفحة الرئيسية")
+        self.assertEqual(label(ar_catalog, "public_catalog_staff:homepage_builder"), "إدارة الصفحة العامة")
 
     def test_browser_navigation_to_write_endpoint_redirects_to_builder(self):
         resp = self.client.get(
