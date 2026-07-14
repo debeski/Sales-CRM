@@ -14,14 +14,15 @@
     <link rel="stylesheet" href="{% static 'bootstrap/bootstrap-icons.css' %}">
     <link rel="stylesheet" href="{% static 'dlux/main/css/main.css' %}">
     <link rel="stylesheet" href="{% static 'dlux/main/css/buttons.css' %}">
-    <link rel="stylesheet" href="{% static 'public_catalog/css/public_catalog.css' %}?v=20260712c">
+    <link rel="stylesheet" href="{% static 'public_catalog/css/public_catalog.css' %}?v=20260714d">
     <link rel="icon" href="{{ APP_CONFIG.favicon_url|default:'/static/img/base_logo.svg' }}">
     <meta name="csrf-token" content="{{ csrf_token }}">
     {% if public_accent %}<style>.public-shell{--public-accent:{{ public_accent }};}</style>{% endif %}
     {% block extra_head %}{% endblock %}
 </head>
 <body>
-<main class="public-shell">
+<main class="public-shell{% if public_bare %} public-shell--bare{% endif %}">
+    {% if not public_bare %}
     <header class="public-nav">
         <a class="public-brand" href="{% url 'public_catalog:landing' %}">
             {% if APP_CONFIG.logo_url %}
@@ -31,22 +32,34 @@
             {% endif %}
             <span class="public-brand__text">{{ APP_CONFIG.identity.display_name|default:"Switch" }}</span>
         </a>
-        <nav aria-label="Public navigation">
-            <a href="{% url 'public_catalog:shop' %}">Shop</a>
-            <button type="button"
-                    data-dynamic-modal="{% url 'public_catalog:contact_modal' %}"
-                    data-modal-title="Contact Switch"
-                    data-public-modal-size="fullscreen">
-                Contact
-            </button>
-        </nav>
+        <div class="public-nav__actions">
+            <nav aria-label="Public navigation">
+                <a href="{% url 'public_catalog:shop' %}">Shop</a>
+                <button type="button"
+                        data-dynamic-modal="{% url 'public_catalog:contact_modal' %}"
+                        data-modal-title="Contact Switch"
+                        data-public-modal-size="fullscreen">
+                    Contact
+                </button>
+            </nav>
+            {% if LANGUAGES|length > 1 %}
+            <div class="public-lang" role="group" aria-label="Language">
+                {% for code, meta in LANGUAGES.items %}
+                <a href="?lang={{ code }}" class="public-lang__opt {% if CURRENT_LANG == code %}is-active{% endif %}" title="{{ meta.name|default:code }}">{{ code|upper }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
     </header>
+    {% endif %}
     {% include 'dlux/includes/messages.html' %}
     {% block public_content %}{% endblock %}
+    {% if not public_bare %}
     <footer class="public-footer">
         <span>{{ APP_CONFIG.identity.display_name|default:"Switch" }}</span>
         <span>Smart locks · access control · installation</span>
     </footer>
+    {% endif %}
 </main>
 
 <script src="{% static 'bootstrap/bootstrap.bundle.min.js' %}" nonce="{{ request.csp_nonce }}"></script>
@@ -68,7 +81,7 @@
     </div>
 </div>
 <script src="{% static 'dlux/helpers/dynamic_modal/js/main.js' %}" nonce="{{ request.csp_nonce }}" defer></script>
-<script src="{% static 'public_catalog/js/public_catalog.js' %}?v=20260712b" nonce="{{ request.csp_nonce }}" defer></script>
+<script src="{% static 'public_catalog/js/public_catalog.js' %}?v=20260714a" nonce="{{ request.csp_nonce }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -81,6 +81,11 @@
             const appState = readAppState();
             if (appState) return appState;
 
+            if (appPrefUrl() || (window.USER_PREFS && typeof window.USER_PREFS === 'object')) {
+                try { localStorage.removeItem(storageKey); } catch (err) {}
+                return {};
+            }
+
             const localState = readLocalState();
             if (localState) {
                 // One-time migration from the pre-1.4.2 browser-only layout.
@@ -171,21 +176,6 @@
                 const open = drawer.hasAttribute('hidden');
                 drawer.toggleAttribute('hidden', !open);
                 customize.setAttribute('aria-expanded', open ? 'true' : 'false');
-                return;
-            }
-
-            if (event.target.closest('[data-dashboard-reset]')) {
-                try { localStorage.removeItem(storageKey); } catch (err) {}
-                persistAppState(null);
-                originalOrder.forEach((id) => {
-                    const tile = grid.querySelector('[data-widget-id="' + id + '"]');
-                    if (tile) {
-                        tile.hidden = false;
-                        tile.dataset.size = tile.dataset.defaultSize || 'm';
-                        grid.appendChild(tile);
-                    }
-                });
-                syncToggles();
                 return;
             }
 

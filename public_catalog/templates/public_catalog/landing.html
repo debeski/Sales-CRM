@@ -4,11 +4,13 @@
 {% block public_title %}{{ homepage_config.hero_title|default:public_config.shop_title }}{% endblock %}
 
 {% block public_content %}
-<section class="public-hero public-hero--{{ homepage_config.hero_media }}" style="--scrim:{{ homepage_config.hero_overlay }}">
-    {% if homepage_config.hero_media == 'custom' and homepage_config.hero_image %}
-    <img class="public-hero__image" src="{{ homepage_config.hero_image }}" alt="">
-    {% elif homepage_config.hero_media == 'featured' and hero_listing and hero_listing.image_url %}
-    <img class="public-hero__image" src="{{ hero_listing.image_url }}" alt="">
+<section class="public-hero public-hero--{{ homepage_config.hero_media }}" style="--scrim:{{ homepage_config.hero_overlay }}"{% if hero_slides|length > 1 %} data-hero-carousel{% endif %}>
+    {% if hero_slides %}
+    <div class="public-hero__media">
+        {% for src in hero_slides %}
+        <div class="public-hero__slide{% if forloop.first %} is-active{% endif %}" data-slide="{{ forloop.counter0 }}"><img src="{{ src }}" alt="" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}"></div>
+        {% endfor %}
+    </div>
     {% elif homepage_config.hero_media == 'logo' and APP_CONFIG.logo_url %}
     <div class="public-hero__fallback"><img src="{{ APP_CONFIG.logo_url }}" alt=""></div>
     {% endif %}
@@ -39,6 +41,11 @@
             {% endif %}
         </div>
     </div>
+    {% if hero_slides|length > 1 %}
+    <div class="public-hero__dots" data-hero-dots>
+        {% for src in hero_slides %}<button type="button" class="{% if forloop.first %}is-active{% endif %}" data-dot="{{ forloop.counter0 }}" aria-label="Slide {{ forloop.counter }}"></button>{% endfor %}
+    </div>
+    {% endif %}
 </section>
 
 {% for section in homepage_sections %}
@@ -100,11 +107,17 @@
         {% endif %}
     </section>
 
-    {% elif section.key == 'contact' and contact_links %}
+    {% elif section.key == 'contact' %}
     <section class="public-contact" data-section="contact">
         {% if section.kicker %}<p class="public-kicker">{{ section.kicker }}</p>{% endif %}
         <h2>{{ section.heading }}</h2>
         <div class="public-actions">
+            <button type="button" class="btn btn-primary px-4"
+                    data-dynamic-modal="{% url 'public_catalog:contact_modal' %}"
+                    data-modal-title="{{ DLUX_STRINGS.hp_contact_title|default:'Contact Switch' }}"
+                    data-public-modal-size="fullscreen">
+                <i class="bi bi-envelope me-1"></i>{{ DLUX_STRINGS.hp_contact|default:'Contact' }}
+            </button>
             {% for link in contact_links %}
             <a class="btn btn-outline-primary px-4" href="{{ link.url }}"><i class="bi {{ link.icon }} me-1"></i>{{ link.label }}</a>
             {% endfor %}

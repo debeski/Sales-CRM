@@ -8,12 +8,23 @@
     --public-teal: #0f766e;
     --public-amber: #8a5a00;
     --public-red: #9b1c31;
+    --public-max: 1560px;
     min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
     color: var(--title, var(--public-ink));
     background:
-        radial-gradient(circle at 12% 8%, rgba(15, 118, 110, .10), transparent 24rem),
-        radial-gradient(circle at 88% 2%, rgba(var(--primal-rgb, 52, 91, 134), .14), transparent 26rem),
-        linear-gradient(180deg, #f8fafc 0%, #eef3f8 52%, #f9fbfd 100%);
+        radial-gradient(circle at 12% 6%, rgba(15, 118, 110, .07), transparent 26rem),
+        radial-gradient(circle at 88% 0%, rgba(var(--primal-rgb, 52, 91, 134), .09), transparent 28rem),
+        linear-gradient(180deg, #ffffff 0%, #f5f8fc 60%, #ffffff 100%);
+}
+
+/* Direct children are flex items in the column: keep them full-width so their
+   own max-width + auto-margins still size and centre them (flex items with auto
+   inline margins otherwise collapse to their content width). */
+.public-shell > * {
+    width: 100%;
 }
 
 .public-nav {
@@ -24,7 +35,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    max-width: 1240px;
+    max-width: var(--public-max);
     margin: 0 auto;
     padding: .85rem clamp(1rem, 3vw, 2rem);
     backdrop-filter: blur(18px);
@@ -103,8 +114,9 @@
 }
 
 .public-footer {
-    max-width: 1240px;
-    margin: 0 auto;
+    width: 100%;
+    max-width: var(--public-max);
+    margin: auto auto 0;
     padding: 2rem clamp(1rem, 3vw, 2rem) 3rem;
     display: flex;
     justify-content: space-between;
@@ -119,7 +131,7 @@
 .public-section,
 .public-contact,
 .public-breadcrumb {
-    max-width: 1240px;
+    max-width: var(--public-max);
     margin: 0 auto;
     padding-inline: clamp(1rem, 3vw, 2rem);
 }
@@ -145,14 +157,69 @@
     box-shadow: 0 24px 80px rgba(15, 23, 42, .24);
 }
 
-.public-hero__image,
+.public-hero__media,
 .public-hero__fallback {
     position: absolute;
     inset-inline: clamp(1rem, 3vw, 2rem);
     inset-block: 1rem;
     z-index: -2;
     border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Carousel slides: confined inside the hero, cover-cropped, cross-fading. */
+.public-hero__slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 1.1s ease;
+}
+.public-hero__slide.is-active { opacity: 1; }
+.public-hero__slide img {
+    width: 100%;
+    height: 100%;
     object-fit: cover;
+    object-position: center;
+    display: block;
+}
+
+/* Blend the image into the hero base and toward the copy side. */
+.public-hero__media::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(9, 14, 24, .55), rgba(9, 14, 24, .12) 46%, transparent 66%),
+        linear-gradient(0deg, rgba(9, 14, 24, .5), transparent 42%);
+}
+[dir="rtl"] .public-hero__media::after {
+    background:
+        linear-gradient(270deg, rgba(9, 14, 24, .55), rgba(9, 14, 24, .12) 46%, transparent 66%),
+        linear-gradient(0deg, rgba(9, 14, 24, .5), transparent 42%);
+}
+
+.public-hero__dots {
+    position: absolute;
+    z-index: 2;
+    inset-block-end: clamp(1.3rem, 3vh, 2rem);
+    inset-inline-end: clamp(1.6rem, 4vw, 3rem);
+    display: flex;
+    gap: .5rem;
+}
+.public-hero__dots button {
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .5);
+    cursor: pointer;
+    transition: width .25s ease, background .25s ease;
+}
+.public-hero__dots button.is-active {
+    width: 26px;
+    background: #fff;
 }
 
 .public-hero__fallback {
@@ -1024,3 +1091,33 @@
 @media (max-width: 767.98px) {
     .public-story { grid-template-columns: 1fr; }
 }
+
+/* Public nav actions + language toggle */
+.public-nav__actions {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.public-lang {
+    display: inline-flex;
+    gap: .15rem;
+    padding: .25rem;
+    border: 1px solid var(--public-line);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .74);
+    box-shadow: 0 12px 36px rgba(15, 23, 42, .08);
+}
+.public-lang__opt {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.9rem;
+    padding: .2rem .55rem;
+    border-radius: 6px;
+    color: var(--public-muted);
+    font-size: .82rem;
+    font-weight: 800;
+    text-decoration: none;
+    transition: background .15s ease, color .15s ease;
+}
+.public-lang__opt:hover { color: var(--primal, #345b86); background: var(--public-soft); }
+.public-lang__opt.is-active { color: #fff; background: var(--primal, #345b86); }

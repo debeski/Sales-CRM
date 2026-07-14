@@ -172,8 +172,9 @@ class WorkspaceDashboardView(LoginRequiredMixin, TemplateView):
     """Project-wide operational dashboard.
 
     The server decides which tiles exist based on permissions and ownership
-    scopes. The browser only persists presentation preferences (order, hidden
-    state, size) in localStorage.
+    scopes. Presentation preferences (order, hidden state, size) are persisted
+    in the user's DLux app-preferences namespace, with localStorage only kept as
+    a fallback for runtimes without the app-preference endpoint.
     """
 
     template_name = "common/workspace_dashboard.html"

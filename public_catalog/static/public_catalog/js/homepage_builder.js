@@ -10,6 +10,7 @@
     var canEdit = root.dataset.canEdit === "1";
     var saveUrl = root.dataset.saveUrl;
     var previewUrl = root.dataset.previewUrl;
+    var activeLang = root.dataset.activeLang || "";
     var clearFlags = {};
 
     function csrf() {
@@ -22,8 +23,20 @@
         statusEl.className = "hpb__status" + (kind ? " is-" + kind : "");
     }
     function reloadPreview() {
-        if (frame) frame.src = previewUrl + "&t=" + Date.now();
+        if (frame) frame.src = previewUrl + (activeLang ? "&hl=" + activeLang : "") + "&t=" + Date.now();
     }
+
+    // Editing-language toggle: reveal that language's fields, preview in it.
+    root.querySelectorAll("[data-hpb-lang]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            activeLang = btn.dataset.hpbLang;
+            root.querySelectorAll("[data-hpb-lang]").forEach(function (b) { b.classList.toggle("active", b === btn); });
+            form.querySelectorAll("[data-lang]").forEach(function (el) {
+                el.hidden = el.getAttribute("data-lang") !== activeLang;
+            });
+            reloadPreview();
+        });
+    });
 
     function sectionsJson() {
         var out = [];
@@ -168,4 +181,25 @@
     });
     var refresh = root.querySelector("[data-hpb-refresh]");
     if (refresh) refresh.addEventListener("click", reloadPreview);
+
+    // Homepage live on/off toggle -> public_catalog config (separate from shop).
+    var settingsUrl = root.dataset.settingsUrl;
+    var liveToggle = root.querySelector("[data-homepage-toggle]");
+    if (liveToggle && canEdit && settingsUrl) {
+        liveToggle.addEventListener("change", function () {
+            liveToggle.disabled = true;
+            var fd = new FormData();
+            fd.append("homepage_enabled", liveToggle.checked ? "1" : "0");
+            fetch(settingsUrl, { method: "POST", headers: { "X-CSRFToken": csrf() }, body: fd })
+                .then(function (r) { if (!r.ok) throw new Error("save"); return r.json(); })
+                .then(function (data) {
+                    var label = root.querySelector("[data-homepage-label]");
+                    if (label) label.textContent = data.config.homepage_enabled ? root.dataset.txtLive : root.dataset.txtOffline;
+                    status(root.dataset.savedMsg, "ok");
+                    reloadPreview();
+                })
+                .catch(function () { liveToggle.checked = !liveToggle.checked; status(root.dataset.errorMsg, "error"); })
+                .then(function () { liveToggle.disabled = false; });
+        });
+    }
 })();

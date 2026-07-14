@@ -20,8 +20,8 @@
      data-error-msg="{{ DLUX_STRINGS.builder_save_failed|default:'Could not save. Please try again.' }}"
      data-txt-published="{{ DLUX_STRINGS.builder_published|default:'Published' }}"
      data-txt-publish="{{ DLUX_STRINGS.builder_publish|default:'Publish' }}"
-     data-txt-live="{{ DLUX_STRINGS.builder_storefront_live|default:'Storefront is live' }}"
-     data-txt-offline="{{ DLUX_STRINGS.builder_storefront_offline|default:'Storefront is offline' }}">
+     data-txt-live="{{ DLUX_STRINGS.builder_shop_live|default:'Shop is live' }}"
+     data-txt-offline="{{ DLUX_STRINGS.builder_shop_offline|default:'Shop is offline' }}">
 
     <header class="shop-builder__head dlux-table-shell">
         <div class="shop-builder__head-copy">
@@ -43,11 +43,11 @@
     <section class="shop-builder__bar dlux-table-shell">
         <label class="storefront-switch {% if not can_edit %}is-disabled{% endif %}">
             <input type="checkbox" role="switch" data-storefront-toggle
-                   {% if public_config.storefront_enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+                   {% if public_config.shop_enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
             <span class="storefront-switch__dot"></span>
             <span class="storefront-switch__text">
-                <b data-storefront-label>{% if public_config.storefront_enabled %}{{ DLUX_STRINGS.builder_storefront_live|default:"Storefront is live" }}{% else %}{{ DLUX_STRINGS.builder_storefront_offline|default:"Storefront is offline" }}{% endif %}</b>
-                <small>{{ DLUX_STRINGS.builder_storefront_hint|default:"When offline, the public shop shows a coming-soon page." }}</small>
+                <b data-storefront-label>{% if public_config.shop_enabled %}{{ DLUX_STRINGS.builder_shop_live|default:"Shop is live" }}{% else %}{{ DLUX_STRINGS.builder_shop_offline|default:"Shop is offline" }}{% endif %}</b>
+                <small>{{ DLUX_STRINGS.builder_shop_hint|default:"When offline, the public shop shows a coming-soon page." }}</small>
             </span>
         </label>
         <div class="shop-builder__stats">
@@ -94,5 +94,5 @@
 
 {% block scripts %}
 {{ block.super }}
-<script src="{% static 'public_catalog/js/shop_builder.js' %}?v=20260712b" nonce="{{ request.csp_nonce }}" defer></script>
+<script src="{% static 'public_catalog/js/shop_builder.js' %}?v=20260714a" nonce="{{ request.csp_nonce }}" defer></script>
 {% endblock %}

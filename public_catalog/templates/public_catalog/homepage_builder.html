@@ -1,19 +1,24 @@
 {% extends "dlux/base.html" %}
 {% load static %}
+{% load dlux_tags %}
 
 {% block title %}{{ DLUX_STRINGS.hp_builder_title|default:"Homepage Builder" }}{% endblock %}
 
 {% block extra_head %}
 {{ block.super }}
-<link rel="stylesheet" href="{% static 'public_catalog/css/homepage_builder.css' %}?v=20260712a">
+<link rel="stylesheet" href="{% static 'public_catalog/css/homepage_builder.css' %}?v=20260714b">
 {% endblock %}
 
 {% block content %}
 <div class="hpb"
      data-hpb
      data-can-edit="{% if can_edit %}1{% endif %}"
+     data-active-lang="{{ homepage_active_lang }}"
      data-save-url="{% url 'public_catalog_staff:homepage_save' %}"
+     data-settings-url="{% url 'public_catalog_staff:builder_settings' %}"
      data-preview-url="{% url 'public_catalog:landing' %}?preview=1"
+     data-txt-live="{{ DLUX_STRINGS.hp_homepage_live|default:'Homepage is live' }}"
+     data-txt-offline="{{ DLUX_STRINGS.hp_homepage_offline|default:'Homepage is offline' }}"
      data-saved-msg="{{ DLUX_STRINGS.hp_saved|default:'Saved' }}"
      data-saving-msg="{{ DLUX_STRINGS.hp_saving|default:'Saving…' }}"
      data-error-msg="{{ DLUX_STRINGS.hp_error|default:'Could not save' }}">
@@ -24,6 +29,19 @@
             <p>{{ DLUX_STRINGS.hp_builder_sub|default:"Design your public landing page — hero, sections and accent — with a live preview." }}</p>
         </div>
         <div class="hpb__head-actions">
+            <label class="hpb-live {% if not can_edit %}is-disabled{% endif %}">
+                <input type="checkbox" role="switch" data-homepage-toggle
+                       {% if public_config.homepage_enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+                <span class="hpb-live__dot"></span>
+                <b data-homepage-label>{% if public_config.homepage_enabled %}{{ DLUX_STRINGS.hp_homepage_live|default:"Homepage is live" }}{% else %}{{ DLUX_STRINGS.hp_homepage_offline|default:"Homepage is offline" }}{% endif %}</b>
+            </label>
+            {% if homepage_languages|length > 1 %}
+            <div class="lang-toggle-container hpb-langtoggle" role="tablist" aria-label="{{ DLUX_STRINGS.hp_edit_language|default:'Editing language' }}">
+                {% for code, lname in homepage_languages %}
+                <button type="button" class="lang-option {% if code == homepage_active_lang %}active{% endif %}" data-hpb-lang="{{ code }}" title="{{ lname }}">{{ code|upper }}</button>
+                {% endfor %}
+            </div>
+            {% endif %}
             <span class="hpb__status" data-hpb-status aria-live="polite"></span>
             <a class="btn btn-outline-secondary rounded-pill" href="{% url 'public_catalog:landing' %}" target="_blank" rel="noopener">
                 <i class="bi bi-box-arrow-up-right me-1"></i>{{ DLUX_STRINGS.hp_open_site|default:"Open live site" }}
@@ -42,16 +60,32 @@
             <details class="hpb-panel" open>
                 <summary><i class="bi bi-stars me-2"></i>{{ DLUX_STRINGS.hp_panel_hero|default:"Hero" }}</summary>
                 <div class="hpb-panel__body">
-                    <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_kicker|default:"Kicker" }}</span>
-                        <input type="text" name="hero_kicker" maxlength="120" value="{{ homepage_config.hero_kicker }}"></label>
-                    <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_title|default:"Title" }}</span>
-                        <input type="text" name="hero_title" maxlength="200" value="{{ homepage_config.hero_title }}" placeholder="{{ public_config.shop_title }}"></label>
-                    <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_subtitle|default:"Subtitle" }}</span>
-                        <textarea name="hero_subtitle" rows="2" placeholder="{{ public_config.shop_subtitle }}">{{ homepage_config.hero_subtitle }}</textarea></label>
+                    <div class="hpb-field">
+                        <span>{{ DLUX_STRINGS.hp_hero_kicker|default:"Kicker" }}</span>
+                        {% for code, lname in homepage_languages %}
+                        <input type="text" name="hero_kicker__{{ code }}" maxlength="120" value="{{ homepage_config.hero_kicker|get_item:code }}" data-lang="{{ code }}" {% if code != homepage_active_lang %}hidden{% endif %}>
+                        {% endfor %}
+                    </div>
+                    <div class="hpb-field">
+                        <span>{{ DLUX_STRINGS.hp_hero_title|default:"Title" }}</span>
+                        {% for code, lname in homepage_languages %}
+                        <input type="text" name="hero_title__{{ code }}" maxlength="200" value="{{ homepage_config.hero_title|get_item:code }}" data-lang="{{ code }}" {% if code != homepage_active_lang %}hidden{% endif %} placeholder="{{ public_config.shop_title }}">
+                        {% endfor %}
+                    </div>
+                    <div class="hpb-field">
+                        <span>{{ DLUX_STRINGS.hp_hero_subtitle|default:"Subtitle" }}</span>
+                        {% for code, lname in homepage_languages %}
+                        <textarea name="hero_subtitle__{{ code }}" rows="2" data-lang="{{ code }}" {% if code != homepage_active_lang %}hidden{% endif %} placeholder="{{ public_config.shop_subtitle }}">{{ homepage_config.hero_subtitle|get_item:code }}</textarea>
+                        {% endfor %}
+                    </div>
 
                     <div class="hpb-field-row">
-                        <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_primary_label|default:"Button label" }}</span>
-                            <input type="text" name="hero_primary_label" maxlength="60" value="{{ homepage_config.hero_primary_label }}"></label>
+                        <div class="hpb-field">
+                            <span>{{ DLUX_STRINGS.hp_hero_primary_label|default:"Button label" }}</span>
+                            {% for code, lname in homepage_languages %}
+                            <input type="text" name="hero_primary_label__{{ code }}" maxlength="60" value="{{ homepage_config.hero_primary_label|get_item:code }}" data-lang="{{ code }}" {% if code != homepage_active_lang %}hidden{% endif %}>
+                            {% endfor %}
+                        </div>
                         <label class="hpb-field"><span>{{ DLUX_STRINGS.hp_hero_primary_url|default:"Button link" }}</span>
                             <input type="text" name="hero_primary_url" value="{{ homepage_config.hero_primary_url }}" placeholder="/shop/"></label>
                     </div>
@@ -101,10 +135,16 @@
                                     <span>{{ section.label }}</span></label>
                             </div>
                             <div class="hpb-section__fields">
-                                <input type="text" name="{{ section.key }}_kicker" value="{{ section.kicker }}" placeholder="{{ DLUX_STRINGS.hp_kicker|default:'Kicker' }}">
-                                <input type="text" name="{{ section.key }}_heading" value="{{ section.heading }}" placeholder="{{ DLUX_STRINGS.hp_heading|default:'Heading' }}">
+                                {% for code, lname in homepage_languages %}
+                                <input type="text" name="{{ section.key }}_kicker__{{ code }}" value="{{ section.kicker|get_item:code }}" data-lang="{{ code }}" {% if code != homepage_active_lang %}hidden{% endif %} placeholder="{{ DLUX_STRINGS.hp_kicker|default:'Kicker' }}">
+                                {% endfor %}
+                                {% for code, lname in homepage_languages %}
+                                <input type="text" name="{{ section.key }}_heading__{{ code }}" value="{{ section.heading|get_item:code }}" data-lang="{{ code }}" {% if code != homepage_active_lang %}hidden{% endif %} placeholder="{{ DLUX_STRINGS.hp_heading|default:'Heading' }}">
+                                {% endfor %}
                                 {% if section.key == 'story' %}
-                                <textarea name="story_body" rows="3" placeholder="{{ DLUX_STRINGS.hp_story_body|default:'Tell your story…' }}">{{ homepage_config.story_body }}</textarea>
+                                {% for code, lname in homepage_languages %}
+                                <textarea name="story_body__{{ code }}" rows="3" data-lang="{{ code }}" {% if code != homepage_active_lang %}hidden{% endif %} placeholder="{{ DLUX_STRINGS.hp_story_body|default:'Tell your story…' }}">{{ homepage_config.story_body|get_item:code }}</textarea>
+                                {% endfor %}
                                 <div class="hpb-image">
                                     <span class="hpb-image__preview" data-story-preview>{% if homepage_config.story_image %}<img src="{{ homepage_config.story_image }}" alt="">{% else %}<i class="bi bi-image"></i>{% endif %}</span>
                                     <label class="btn btn-sm btn-outline-secondary rounded-pill mb-0"><i class="bi bi-upload me-1"></i>{{ DLUX_STRINGS.hp_upload|default:"Upload" }}<input type="file" name="story_image" accept="image/*" hidden data-story-input></label>
@@ -151,5 +191,5 @@
 
 {% block scripts %}
 {{ block.super }}
-<script src="{% static 'public_catalog/js/homepage_builder.js' %}?v=20260712a" nonce="{{ request.csp_nonce }}" defer></script>
+<script src="{% static 'public_catalog/js/homepage_builder.js' %}?v=20260714b" nonce="{{ request.csp_nonce }}" defer></script>
 {% endblock %}

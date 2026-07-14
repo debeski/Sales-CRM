@@ -105,8 +105,8 @@ class PublicStaffSplitTests(TestCase):
             self.assertEqual(response.status_code, 200, path)
             html = response.content.decode()
             self.assertIn("public-shell", html)
-            self.assertIn("public_catalog/css/public_catalog.css?v=20260712c", html)
-            self.assertIn("public_catalog/js/public_catalog.js?v=20260712b", html)
+            self.assertIn("public_catalog/css/public_catalog.css?v=20260714d", html)
+            self.assertIn("public_catalog/js/public_catalog.js?v=20260714a", html)
             self.assertIn('data-public-modal-size="fullscreen"', html)
             self.assertNotIn("Staff sign in", html)
             self.assertNotIn(">Staff</a>", html)
@@ -189,7 +189,7 @@ class PublicStaffSplitTests(TestCase):
         css_path = Path(__file__).resolve().parents[1] / "static" / "public_catalog" / "css" / "public_catalog.css"
         css = css_path.read_text(encoding="utf-8")
 
-        self.assertIn(".public-hero__image", css)
+        self.assertIn(".public-hero__slide", css)
         self.assertIn(".public-card__status", css)
         self.assertIn("grid-template-columns: repeat(auto-fill, minmax(245px, 1fr))", css)
         self.assertIn(":root.theme-aether .public-shell", css)

@@ -6,7 +6,8 @@ from django.urls import reverse
 
 from catalog.models import Category, Product
 from public_catalog.homepage import (
-    HOMEPAGE_DEFAULTS, get_homepage_config, normalize_sections, set_homepage_config,
+    HOMEPAGE_DEFAULTS, get_homepage_config, localize, normalize_sections,
+    resolve_homepage, set_homepage_config,
 )
 from public_catalog.models import PublicCatalogListing
 from public_catalog.settings import set_public_catalog_config
@@ -32,6 +33,18 @@ class HomepageConfigTests(TestCase):
         self.assertEqual(set(keys), {"featured", "categories", "services", "story", "contact"})
         self.assertFalse(result[0]["enabled"])  # contact stayed disabled
 
+    def test_localized_fields_store_per_language_and_resolve_with_fallback(self):
+        cfg = set_homepage_config({"hero_title": {"en": "Secure space", "ar": "مساحة"}})
+        self.assertEqual(cfg["hero_title"], {"en": "Secure space", "ar": "مساحة"})
+        self.assertEqual(resolve_homepage(cfg, lang="en")["hero_title"], "Secure space")
+        self.assertEqual(resolve_homepage(cfg, lang="ar")["hero_title"], "مساحة")
+        # empty language falls back to any filled value
+        cfg = set_homepage_config({"hero_title": {"en": "Only EN", "ar": ""}})
+        self.assertEqual(resolve_homepage(cfg, lang="ar")["hero_title"], "Only EN")
+        # legacy plain-string config migrates into the default-language slot
+        cfg = set_homepage_config({"hero_subtitle": "Legacy string"})
+        self.assertEqual(localize(cfg["hero_subtitle"], "en", "en"), "Legacy string")
+
     def test_accent_and_overlay_are_sanitised(self):
         cfg = set_homepage_config({"accent": "0EA5E9", "hero_overlay": "250"})
         self.assertEqual(cfg["accent"], "#0ea5e9")
@@ -56,7 +69,7 @@ class HomepageBuilderViewTests(TestCase):
 
     def tearDown(self):
         set_homepage_config(dict(HOMEPAGE_DEFAULTS))
-        set_public_catalog_config({"storefront_enabled": True})
+        set_public_catalog_config({"homepage_enabled": True, "shop_enabled": True})
 
     def test_builder_page_renders(self):
         resp = self.client.get(reverse("public_catalog_staff:homepage_builder"))
@@ -66,18 +79,21 @@ class HomepageBuilderViewTests(TestCase):
         self.assertIn("data-hpb-sections", html)
         self.assertIn("preview=1", html)
 
-    def test_save_persists_hero_accent_and_section_order(self):
+    def test_save_persists_localized_hero_accent_and_section_order(self):
         resp = self.client.post(reverse("public_catalog_staff:homepage_save"), {
-            "hero_title": "Secure your space",
+            "hero_title__en": "Secure your space",
+            "hero_title__ar": "مساحة آمنة",
             "hero_media": "gradient",
             "hero_overlay": "70",
             "accent": "#0ea5e9",
-            "featured_heading": "Our picks",
+            "featured_heading__en": "Our picks",
             "sections": '[{"key":"story","enabled":true},{"key":"featured","enabled":true}]',
         })
         self.assertEqual(resp.status_code, 200)
         cfg = get_homepage_config()
-        self.assertEqual(cfg["hero_title"], "Secure your space")
+        self.assertEqual(cfg["hero_title"]["en"], "Secure your space")
+        self.assertEqual(cfg["hero_title"]["ar"], "مساحة آمنة")
+        self.assertEqual(cfg["featured_heading"]["en"], "Our picks")
         self.assertEqual(cfg["hero_media"], "gradient")
         self.assertEqual(cfg["hero_overlay"], 70)
         self.assertEqual(cfg["accent"], "#0ea5e9")
@@ -95,12 +111,24 @@ class HomepageBuilderViewTests(TestCase):
         self.assertIn("public-hero--gradient", html)
         self.assertIn("Who we are", html)
 
-    def test_staff_preview_bypasses_offline_gate(self):
-        set_public_catalog_config({"storefront_enabled": False})
+    def test_public_language_toggle_switches_landing_content(self):
+        set_homepage_config({"hero_title": {"en": "Secure space", "ar": "مساحة آمنة"}})
         anon = Client()
-        self.assertEqual(anon.get(reverse("public_catalog:landing")).status_code, 503)
+        en = anon.get(reverse("public_catalog:landing") + "?lang=en").content.decode()
+        self.assertIn("public-lang", en)          # toggle rendered on the public header
+        self.assertIn('lang="en"', en)
+        self.assertIn("Secure space", en)
+        ar = anon.get(reverse("public_catalog:landing") + "?lang=ar").content.decode()
+        self.assertIn("مساحة آمنة", ar)
+
+    def test_staff_preview_bypasses_offline_gate(self):
+        set_public_catalog_config({"homepage_enabled": False})
+        anon = Client()
+        landing = anon.get(reverse("public_catalog:landing"))
+        self.assertEqual(landing.status_code, 503)
+        self.assertNotIn("public-nav", landing.content.decode())  # bare coming-soon, no header bar
         self.assertEqual(anon.get(reverse("public_catalog:landing") + "?preview=1").status_code, 503)
-        # authed staff with permission may preview the offline storefront
+        # authed staff with permission may preview the offline homepage
         self.assertEqual(self.client.get(reverse("public_catalog:landing") + "?preview=1").status_code, 200)
 
     def test_get_on_save_is_silent_no_op(self):

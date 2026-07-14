@@ -90,20 +90,28 @@ class PublicCatalogBuilderTests(TestCase):
         self.assertEqual(b.sort_order, 0)
         self.assertEqual(a.sort_order, 1)
 
-    def test_settings_toggle_persists_and_gates_public(self):
+    def test_shop_and_homepage_toggles_are_independent(self):
+        # Turn the SHOP off only; the homepage must stay live.
         resp = self.client.post(
             reverse("public_catalog_staff:builder_settings"),
-            {"storefront_enabled": "0", "featured_limit": "6"},
+            {"shop_enabled": "0", "featured_limit": "6"},
         )
         self.assertEqual(resp.status_code, 200)
         cfg = get_public_catalog_config()
-        self.assertFalse(cfg["storefront_enabled"])
+        self.assertFalse(cfg["shop_enabled"])
+        self.assertTrue(cfg["homepage_enabled"])
         self.assertEqual(cfg["featured_limit"], 6)
-        # Public storefront now shows the coming-soon page.
         anon = Client()
+        self.assertEqual(anon.get(reverse("public_catalog:shop")).status_code, 503)
+        self.assertEqual(anon.get(reverse("public_catalog:landing")).status_code, 200)
+
+        # Now turn the HOMEPAGE off and the shop back on — they swap independently.
+        self.client.post(reverse("public_catalog_staff:builder_settings"),
+                         {"shop_enabled": "1", "homepage_enabled": "0"})
         landing = anon.get(reverse("public_catalog:landing"))
         self.assertEqual(landing.status_code, 503)
         self.assertIn("public-comingsoon", landing.content.decode())
+        self.assertEqual(anon.get(reverse("public_catalog:shop")).status_code, 200)
 
     def test_get_on_write_endpoints_is_silent_no_op(self):
         # Browser speculative prefetch (GET) must not 405 or mutate — it returns 204.
@@ -124,14 +132,16 @@ class PublicCatalogBuilderTests(TestCase):
             for entry in en_catalog
             if entry["url_name"].startswith("public_catalog_staff:")
         }
-        en_entry = next(entry for entry in en_catalog if entry["url_name"] == "public_catalog_staff:builder")
-        ar_entry = next(entry for entry in ar_catalog if entry["url_name"] == "public_catalog_staff:builder")
+        def label(catalog, url_name):
+            return next(e["label"] for e in catalog if e["url_name"] == url_name)
 
         # Only the two builder pages are navigable; the POST-only write endpoints
         # (toggle-publish/update-listing/reorder/settings/homepage-save) are excluded.
         self.assertEqual(names, {"public_catalog_staff:builder", "public_catalog_staff:homepage_builder"})
-        self.assertEqual(en_entry["label"], "Public Catalog Builder")
-        self.assertEqual(ar_entry["label"], "منشئ المتجر العام")
+        self.assertEqual(label(en_catalog, "public_catalog_staff:builder"), "Public Catalog Builder")
+        self.assertEqual(label(ar_catalog, "public_catalog_staff:builder"), "منشئ المتجر العام")
+        self.assertEqual(label(en_catalog, "public_catalog_staff:homepage_builder"), "Homepage Builder")
+        self.assertEqual(label(ar_catalog, "public_catalog_staff:homepage_builder"), "منشئ الصفحة الرئيسية")
 
     def test_browser_navigation_to_write_endpoint_redirects_to_builder(self):
         resp = self.client.get(
@@ -153,4 +163,4 @@ class PublicCatalogBuilderTests(TestCase):
         self.assertFalse(PublicCatalogListing.objects.filter(product=self.product).exists())
 
     def tearDown(self):
-        set_public_catalog_config({"storefront_enabled": True})
+        set_public_catalog_config({"homepage_enabled": True, "shop_enabled": True})

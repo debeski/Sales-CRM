@@ -218,8 +218,9 @@ def builder_reorder(request):
 @mutation_endpoint
 def builder_settings(request):
     patch = {}
-    if "storefront_enabled" in request.POST:
-        patch["storefront_enabled"] = request.POST.get("storefront_enabled") in ("1", "true", "on", "True")
+    for flag in ("homepage_enabled", "shop_enabled"):
+        if flag in request.POST:
+            patch[flag] = request.POST.get(flag) in ("1", "true", "on", "True")
     if "featured_limit" in request.POST:
         try:
             patch["featured_limit"] = max(0, int(request.POST.get("featured_limit") or 0))
@@ -227,7 +228,8 @@ def builder_settings(request):
             pass
     cfg = set_public_catalog_config(patch, request=request)
     return JsonResponse({"ok": True, "config": {
-        "storefront_enabled": cfg["storefront_enabled"],
+        "homepage_enabled": cfg["homepage_enabled"],
+        "shop_enabled": cfg["shop_enabled"],
         "featured_limit": cfg["featured_limit"],
     }})
 
@@ -253,13 +255,22 @@ class PublicHomepageBuilderView(LoginRequiredMixin, PermissionRequiredMixin, Tem
 
     def get_context_data(self, **kwargs):
         from common.i18n import t
-        from .homepage import HOMEPAGE_NS, get_homepage_config, resolve_sections
+        from .homepage import (
+            HOMEPAGE_NS, builder_sections, get_homepage_config, get_public_languages,
+        )
 
         ctx = super().get_context_data(**kwargs)
         cfg = get_homepage_config()
+        languages, default_lang = get_public_languages()
+        active = ctx.get("CURRENT_LANG") or self.request.session.get("lang") or default_lang
+        codes = [c for c, _l in languages]
         ctx.update({
             "homepage_config": cfg,
-            "homepage_sections": resolve_sections(cfg),
+            "public_config": get_public_catalog_config(),
+            "homepage_sections": builder_sections(cfg),
+            "homepage_languages": languages,
+            "homepage_default_lang": default_lang,
+            "homepage_active_lang": active if active in codes else default_lang,
             "homepage_settings_ns": HOMEPAGE_NS,
             "hero_media_choices": [
                 ("featured", t("hp_media_featured", "Featured image")),
@@ -275,14 +286,22 @@ class PublicHomepageBuilderView(LoginRequiredMixin, PermissionRequiredMixin, Tem
 
 @mutation_endpoint
 def homepage_save(request):
-    from .homepage import HOMEPAGE_DEFAULTS, set_homepage_config
+    from .homepage import (
+        HOMEPAGE_DEFAULTS, LOCALIZED_KEYS, set_homepage_config, get_public_languages,
+    )
 
     post = request.POST
     patch = {}
+    codes = [c for c, _l in get_public_languages()[0]]
     for key, default in HOMEPAGE_DEFAULTS.items():
         if key in ("sections", "hero_image", "story_image"):
             continue
-        if key in ("hero_show_contact", "show_stats"):
+        if key in LOCALIZED_KEYS:
+            present = {code: (post.get(f"{key}__{code}") or "").strip()
+                       for code in codes if f"{key}__{code}" in post}
+            if present:
+                patch[key] = present
+        elif key in ("hero_show_contact", "show_stats"):
             if key in post:
                 patch[key] = post.get(key) in ("1", "true", "on", "True")
         elif key == "hero_overlay":

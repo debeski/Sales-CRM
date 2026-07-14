@@ -19,4 +19,37 @@
         dialog.classList.remove("modal-fullscreen");
         dialog.classList.add("modal-dialog-centered");
     });
+
+    // Hero carousel: cross-fade featured images with dot navigation + autoplay.
+    function initHeroCarousel(hero) {
+        var slides = Array.prototype.slice.call(hero.querySelectorAll(".public-hero__slide"));
+        var dots = Array.prototype.slice.call(hero.querySelectorAll("[data-hero-dots] button"));
+        if (slides.length < 2) return;
+        var index = 0;
+        var timer = null;
+
+        function show(next) {
+            index = (next + slides.length) % slides.length;
+            slides.forEach(function (s, i) { s.classList.toggle("is-active", i === index); });
+            dots.forEach(function (d, i) { d.classList.toggle("is-active", i === index); });
+        }
+        function start() { stop(); timer = setInterval(function () { show(index + 1); }, 5500); }
+        function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+        dots.forEach(function (dot, i) {
+            dot.addEventListener("click", function () { show(i); start(); });
+        });
+        hero.addEventListener("mouseenter", stop);
+        hero.addEventListener("mouseleave", start);
+        start();
+    }
+
+    function initCarousels(root) {
+        (root || document).querySelectorAll("[data-hero-carousel]").forEach(initHeroCarousel);
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () { initCarousels(document); });
+    } else {
+        initCarousels(document);
+    }
 })();

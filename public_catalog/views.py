@@ -8,8 +8,10 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.generic import DetailView, TemplateView
 
+from dlux.translations import get_current_language_code
+
 from .forms import PublicContactForm
-from .homepage import get_homepage_config, resolve_sections
+from .homepage import get_homepage_config, resolve_homepage, resolve_sections
 from .models import PublicCatalogListing, PublicContactMessage
 from .settings import contact_links, get_public_catalog_config
 
@@ -43,11 +45,37 @@ def _is_staff_preview(request):
     )
 
 
+def _apply_public_language(request):
+    """Honor the public header ``?lang=<code>`` toggle. An explicit click is an
+    explicit choice, so we set it as a forced language preview (the mechanism
+    DLux's own language picker uses) — this is honored regardless of the
+    ``allow_user_language_override`` setting."""
+    from dlux.utils import get_system_config
+
+    lang = request.GET.get("lang")
+    if not lang or not hasattr(request, "session"):
+        return
+    langs = get_system_config().get("languages") or {}
+    if lang in langs:
+        request.session["lang"] = lang
+        request.session["dlux_force_language_preview"] = True
+
+
 class _StorefrontGateMixin:
+    # Which config flag gates this surface: shop views use "shop_enabled",
+    # the landing overrides to "homepage_enabled" — so each can be toggled alone.
+    gate_key = "shop_enabled"
+
     def dispatch(self, request, *args, **kwargs):
+        _apply_public_language(request)
         cfg = get_public_catalog_config()
-        if not cfg.get("storefront_enabled", True) and not _is_staff_preview(request):
-            return render(request, "public_catalog/coming_soon.html", {"public_config": cfg}, status=503)
+        if not cfg.get(self.gate_key, True) and not _is_staff_preview(request):
+            return render(
+                request,
+                "public_catalog/coming_soon.html",
+                {"public_config": cfg, "public_bare": True},
+                status=503,
+            )
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -66,22 +94,38 @@ def _homepage_category_tiles(listings):
 
 class PublicLandingView(_StorefrontGateMixin, TemplateView):
     template_name = "public_catalog/landing.html"
+    gate_key = "homepage_enabled"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         cfg = get_public_catalog_config()
-        home = get_homepage_config()
+        # Language: the visitor's active language; staff preview can force one via ?hl=.
+        lang = None
+        if _is_staff_preview(self.request):
+            lang = self.request.GET.get("hl") or None
+        home = resolve_homepage(lang=lang or get_current_language_code(self.request))
         limit = cfg.get("featured_limit") or 4
         listings = _public_listings()
         featured = [listing for listing in listings if listing.is_featured][:limit]
         hero_listing = (featured or listings[:1] or [None])[0]
         services = [listing for listing in listings if listing.source_kind == "service"]
+
+        if home.get("hero_media") == "featured":
+            hero_slides = [l.image_url for l in featured if l.image_url]
+            if not hero_slides and hero_listing and hero_listing.image_url:
+                hero_slides = [hero_listing.image_url]
+        elif home.get("hero_media") == "custom" and home.get("hero_image"):
+            hero_slides = [home["hero_image"]]
+        else:
+            hero_slides = []
+
         ctx.update({
             "public_config": cfg,
             "homepage_config": home,
             "homepage_sections": [s for s in resolve_sections(home) if s["enabled"]],
             "public_accent": home.get("accent"),
             "hero_listing": hero_listing,
+            "hero_slides": hero_slides,
             "featured_listings": featured or listings[:limit],
             "service_listings": services[:8],
             "category_tiles": _homepage_category_tiles(listings)[:8],
@@ -161,7 +205,7 @@ class PublicItemDetailView(_StorefrontGateMixin, DetailView):
 
 
 def public_item_modal(request, slug):
-    if not get_public_catalog_config().get("storefront_enabled", True):
+    if not get_public_catalog_config().get("shop_enabled", True):
         raise Http404("Storefront is offline.")
     listing = get_object_or_404(PublicCatalogListing.objects.published(), slug=slug)
     if not listing.show_when_unavailable and not listing.is_available_for_public:

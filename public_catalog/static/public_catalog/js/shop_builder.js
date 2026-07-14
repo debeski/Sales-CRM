@@ -286,10 +286,10 @@
     if (storefront && canEdit) {
         storefront.addEventListener("change", function () {
             storefront.disabled = true;
-            post(URLS.settings, formOf({ storefront_enabled: storefront.checked ? "1" : "0" }), true)
+            post(URLS.settings, formOf({ shop_enabled: storefront.checked ? "1" : "0" }), true)
                 .then(function (data) {
                     var label = root.querySelector("[data-storefront-label]");
-                    if (label) label.textContent = data.config.storefront_enabled ? root.dataset.txtLive : root.dataset.txtOffline;
+                    if (label) label.textContent = data.config.shop_enabled ? root.dataset.txtLive : root.dataset.txtOffline;
                     toast(root.dataset.savedMsg);
                 })
                 .catch(function () {

@@ -65,11 +65,12 @@ class WorkspaceDashboardTests(TestCase):
         self.assertIn("data-dashboard-grid", html)
         self.assertIn("data-dashboard-customize", html)
         self.assertIn("common/css/workspace_dashboard.css?v=20260710d", html)
-        self.assertIn("common/js/workspace_dashboard.js?v=20260711b", html)
+        self.assertIn("common/js/workspace_dashboard.js?v=20260713a", html)
         self.assertIn(WORKSPACE_PREF_NAMESPACE, html)
         self.assertIn('data-app-pref-url-template="/staff/sys/api/preferences/app/__namespace__/"', html)
         self.assertIn('data-widget-id="quick_actions"', html)
         self.assertIn('data-widget-id="purchase_month"', html)
+        self.assertNotIn("data-dashboard-reset", html)
 
     def test_sales_rep_workspace_uses_owned_invoice_totals(self):
         rep = User.objects.create_user("rep", password="x")
@@ -201,5 +202,7 @@ class WorkspaceDashboardTests(TestCase):
         js = js_path.read_text(encoding="utf-8")
 
         self.assertIn("appPrefUrlTemplate", js)
+        self.assertIn("localStorage.removeItem(storageKey)", js)
         self.assertIn("fetch(url", js)
         self.assertLess(js.index("const url = appPrefUrl();"), js.index("window.updateAppPreference"))
+        self.assertNotIn("data-dashboard-reset", js)

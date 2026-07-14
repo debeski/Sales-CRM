@@ -23,9 +23,6 @@
             <button type="button" class="workspace-icon-btn" data-dashboard-customize aria-expanded="false" title="{{ DLUX_STRINGS.ui_customize|default:'Customize' }}">
                 <i class="bi bi-sliders"></i><span>{{ DLUX_STRINGS.ui_customize|default:"Customize" }}</span>
             </button>
-            <button type="button" class="workspace-icon-btn" data-dashboard-reset title="{{ DLUX_STRINGS.ui_reset_layout|default:'Reset layout' }}">
-                <i class="bi bi-arrow-counterclockwise"></i><span>{{ DLUX_STRINGS.ui_reset_layout|default:"Reset" }}</span>
-            </button>
         </div>
     </header>
 
@@ -131,5 +128,5 @@
 
 {% block scripts %}
 {{ block.super }}
-<script src="{% static 'common/js/workspace_dashboard.js' %}?v=20260711b" nonce="{{ request.csp_nonce }}" defer></script>
+<script src="{% static 'common/js/workspace_dashboard.js' %}?v=20260713a" nonce="{{ request.csp_nonce }}" defer></script>
 {% endblock %}

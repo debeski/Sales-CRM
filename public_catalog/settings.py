@@ -13,7 +13,8 @@ PUBLIC_CATALOG_DEFAULTS = {
     "contact_email": "",
     "show_price": True,
     "show_availability": True,
-    "storefront_enabled": True,
+    "homepage_enabled": True,
+    "shop_enabled": True,
     "featured_limit": 4,
 }
 
@@ -23,9 +24,15 @@ def get_public_catalog_config():
     if not isinstance(stored, dict):
         stored = {}
     cfg = {**PUBLIC_CATALOG_DEFAULTS, **stored}
+    # Migrate the old single storefront flag to the split homepage/shop flags.
+    if "storefront_enabled" in stored and "homepage_enabled" not in stored and "shop_enabled" not in stored:
+        legacy = bool(stored.get("storefront_enabled"))
+        cfg["homepage_enabled"] = legacy
+        cfg["shop_enabled"] = legacy
     cfg["show_price"] = bool(cfg.get("show_price"))
     cfg["show_availability"] = bool(cfg.get("show_availability"))
-    cfg["storefront_enabled"] = bool(cfg.get("storefront_enabled"))
+    cfg["homepage_enabled"] = bool(cfg.get("homepage_enabled"))
+    cfg["shop_enabled"] = bool(cfg.get("shop_enabled"))
     try:
         cfg["featured_limit"] = max(0, int(cfg.get("featured_limit") or 0))
     except (TypeError, ValueError):

@@ -3,7 +3,7 @@
 ## Part 1: Project Related
 
 ### Current Verified Snapshot:
-Django POS/ERP on django-lux 1.4.4 (host venv symlinked to mounted source `/Users/debeski/Desktop/depy/pkg-django-lux/dlux`). Apps: finance, catalog, sales, common, public_catalog. Public `/` + `/shop/...` + `/contact/modal/`; staff workflow under `/staff/...` (+ `/staff/shop-builder/` catalog builder & `/staff/shop-builder/homepage/` homepage builder); Caddy only proxies/legacy-redirects. VERSION/CHANGELOG at v0.5.1 (unreleased; v0.5.0 is tagged). Current baseline: 166 pass. `public_catalog` unreleased migration is squashed to `0001`.
+Django POS/ERP on django-lux 1.4.4 (host venv symlinked to mounted source `/Users/debeski/Desktop/depy/pkg-django-lux/dlux`). Apps: finance, catalog, sales, common, public_catalog. Public `/` + `/shop/...` + `/contact/modal/`; staff workflow under `/staff/...` (+ `/staff/shop-builder/` catalog builder & `/staff/shop-builder/homepage/` homepage builder); Caddy only proxies/legacy-redirects. VERSION/CHANGELOG at v0.5.1 (unreleased; v0.5.0 is tagged). Current baseline: 167 pass. `public_catalog` unreleased migration is squashed to `0001`.
 
 ### Current Project Adopted Standards:
 - Scoped models via dlux ScopedModel; list pages via common.ScopedListView + dlux modal_manager.
@@ -34,6 +34,8 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [ ] Optional: inject per-list Add button into the filter bar (config "buttons") vs current separate top-right button.
   - [ ] Browser smoke-test modal edit/delete (row actions) — combobox verified via test client.
 - **Completed Recently:**
+  - [x] (v0.5.1) Homepage builder v2: per-language content (`LOCALIZED_KEYS` → `{lang:val}` dicts, `get_public_languages`/`resolve_homepage`/`localize`, `field__<lang>` save), DLux-style editing-language toggle (preview via `?preview=1&hl=`), contact section always shows Contact-modal CTA, hero image confined+blended (`.public-hero__media/__slide`), multi-highlight hero carousel (`public_catalog.js initHeroCarousel` + dots), wider/cleaner landing (`--public-max:1320px`, lighter bg). Assets `?v=20260714a`. 167 pass.
+  - [x] (v0.5.1) Workspace reset removal: removed workspace dashboard Reset button/handler; DLux app prefs remain source of truth, and stale `localStorage` is cleared instead of rehydrating `switch_pos.workspace_dashboard.v1` after DLux Reset Defaults.
   - [x] (v0.5.1) Public Homepage Builder at `/staff/shop-builder/homepage/`: live-preview-iframe editor for the landing page (hero copy/CTA/background mode/overlay, reorderable+toggleable sections w/ per-section copy, Story block, accent colour). New `public_catalog/homepage.py` config in namespace `switch_pos.public_homepage` + `register_app_settings` tile; `landing.html`/`PublicLandingView` fully config/section-driven (featured/categories/services/story/contact); accent → `--public-accent` var. `homepage_save` reuses `mutation_endpoint`+`sidebar_exclude`; staff `?preview=1` bypasses the offline 503 gate. `homepage_builder.{html,css,js}`, EN/AR. +14 tests → 166 pass.
   - [x] (v0.5.0) Public catalog builder sidebar label translation: removed explicit lazy callback label and added `public_catalog_staff_builder` EN/AR discovery key; regression checks `Public Catalog Builder` / `منشئ المتجر العام`.
   - [x] (v0.5.0) Workspace dashboard sidebar label translation: added `workspace_dashboard` EN/AR key and DLux discovery regression for `common:workspace_dashboard` → `Workspace` / `مساحة العمل`.
@@ -65,10 +67,10 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [x] (v0.1.3-v0.1.5) Caddy edge + portfolio split, composer-updater topology, dashboard rates, customer/deposit comboboxes, translated filters/choices/permissions, seed demo.
 
 ### One-line info about last verified Tests:
-2026-07-13: Homepage Builder — `check`, `makemigrations --check` (none), homepage tests 8 + full suite 166 pass, `git diff --check` clean; verified builder renders, save persists hero/accent/section-order, landing reflects config, staff `?preview=1` bypasses offline 503, GET save→204.
+2026-07-13: Workspace reset removal — `check`, workspace dashboard tests 9, full suite 166 pass, `git diff --check` clean.
 
 ### One-line info about last time edited Docs:
-CHANGELOG.md — added workspace and public catalog builder sidebar label translation notes; docs unchanged for translation-only fixes.
+CHANGELOG.md — added workspace reset removal/localStorage rehydration fix; no standalone docs mention a workspace reset control.
 
 ## Part 2: Global
 

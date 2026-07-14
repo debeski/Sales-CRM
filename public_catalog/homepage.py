@@ -3,9 +3,13 @@
 Stored in the DLux app-settings store under its own namespace, exactly like the
 public catalog / products-layout settings. The homepage builder writes here; the
 public landing view reads a resolved config + an ordered list of enabled sections.
+
+Text fields in ``LOCALIZED_KEYS`` are stored per-language (``{lang_code: value}``)
+so the builder can edit each discovered DLux language and the public page renders
+the visitor's language (falling back to the default language, then any value).
 """
 from dlux.options import write_app_system_config
-from dlux.utils import get_app_system_config
+from dlux.utils import get_app_system_config, get_system_config
 
 HOMEPAGE_NS = "switch_pos.public_homepage"
 
@@ -22,13 +26,23 @@ DEFAULT_SECTIONS = [
 
 HERO_MEDIA_MODES = ("featured", "logo", "custom", "gradient")
 
+# Text fields stored as {lang_code: value} dicts.
+LOCALIZED_KEYS = (
+    "hero_kicker", "hero_title", "hero_subtitle", "hero_primary_label", "story_body",
+    "featured_kicker", "featured_heading",
+    "categories_kicker", "categories_heading",
+    "services_kicker", "services_heading",
+    "story_kicker", "story_heading",
+    "contact_kicker", "contact_heading",
+)
+
 HOMEPAGE_DEFAULTS = {
-    # Hero
+    # Hero (localized text default seeds go to the default language on first read)
     "hero_kicker": "Switch Libya",
     "hero_title": "",            # blank -> shop_title
     "hero_subtitle": "",         # blank -> shop_subtitle
     "hero_primary_label": "Shop",
-    "hero_primary_url": "",      # blank -> public shop
+    "hero_primary_url": "",      # blank -> public shop (not localized)
     "hero_show_contact": True,
     "hero_media": "featured",    # featured | logo | custom | gradient
     "hero_image": "",            # media url when hero_media == custom
@@ -36,7 +50,7 @@ HOMEPAGE_DEFAULTS = {
     "show_stats": True,
     # Site accent (blank -> theme default)
     "accent": "",
-    # Per-section copy
+    # Per-section copy (localized)
     "featured_kicker": "Featured catalog",
     "featured_heading": "Ready for customer viewing",
     "categories_kicker": "Categories",
@@ -46,7 +60,7 @@ HOMEPAGE_DEFAULTS = {
     "story_kicker": "Who we are",
     "story_heading": "About Switch",
     "story_body": "",
-    "story_image": "",
+    "story_image": "",           # not localized
     "contact_kicker": "Contact",
     "contact_heading": "Talk to Switch about supply and installation",
     # Ordered, toggleable sections
@@ -54,10 +68,36 @@ HOMEPAGE_DEFAULTS = {
 }
 
 _BOOL_KEYS = ("hero_show_contact", "show_stats")
-_TEXT_KEYS = tuple(
-    k for k, v in HOMEPAGE_DEFAULTS.items()
-    if isinstance(v, str)
-)
+
+
+def get_public_languages():
+    """Return (``[(code, label), ...]``, default_code) from DLux system config."""
+    cfg = get_system_config()
+    langs = cfg.get("languages") or {}
+    codes = list(langs.keys()) or ["en"]
+    default = str(cfg.get("default_language") or codes[0])
+    if default not in codes:
+        default = codes[0]
+    return [(code, (langs.get(code) or {}).get("name", code.upper())) for code in codes], default
+
+
+def _lang_codes():
+    langs, default = get_public_languages()
+    return [code for code, _label in langs], default
+
+
+def _normalize_localized(value, codes, default):
+    if isinstance(value, dict):
+        return {code: str(value.get(code, "") or "") for code in codes}
+    out = {code: "" for code in codes}
+    out[default] = str(value or "")
+    return out
+
+
+def localize(value, lang, default):
+    if isinstance(value, dict):
+        return value.get(lang) or value.get(default) or next((v for v in value.values() if v), "")
+    return value or ""
 
 
 def _clamp_overlay(value):
@@ -84,21 +124,6 @@ def normalize_sections(stored):
     return result
 
 
-def get_homepage_config():
-    stored = get_app_system_config(HOMEPAGE_NS, {}) or {}
-    if not isinstance(stored, dict):
-        stored = {}
-    cfg = {**HOMEPAGE_DEFAULTS, **stored}
-    for key in _BOOL_KEYS:
-        cfg[key] = bool(cfg.get(key))
-    cfg["hero_overlay"] = _clamp_overlay(cfg.get("hero_overlay"))
-    if cfg.get("hero_media") not in HERO_MEDIA_MODES:
-        cfg["hero_media"] = HOMEPAGE_DEFAULTS["hero_media"]
-    cfg["accent"] = _sanitize_hex(cfg.get("accent"))
-    cfg["sections"] = normalize_sections(cfg.get("sections"))
-    return cfg
-
-
 def _sanitize_hex(value):
     value = str(value or "").strip()
     if not value:
@@ -111,12 +136,33 @@ def _sanitize_hex(value):
     return ""
 
 
+def get_homepage_config():
+    stored = get_app_system_config(HOMEPAGE_NS, {}) or {}
+    if not isinstance(stored, dict):
+        stored = {}
+    cfg = {**HOMEPAGE_DEFAULTS, **stored}
+    codes, default = _lang_codes()
+    for key in LOCALIZED_KEYS:
+        cfg[key] = _normalize_localized(cfg.get(key), codes, default)
+    for key in _BOOL_KEYS:
+        cfg[key] = bool(cfg.get(key))
+    cfg["hero_overlay"] = _clamp_overlay(cfg.get("hero_overlay"))
+    if cfg.get("hero_media") not in HERO_MEDIA_MODES:
+        cfg["hero_media"] = HOMEPAGE_DEFAULTS["hero_media"]
+    cfg["accent"] = _sanitize_hex(cfg.get("accent"))
+    cfg["sections"] = normalize_sections(cfg.get("sections"))
+    return cfg
+
+
 def set_homepage_config(patch, *, request=None):
     cfg = get_homepage_config()
+    codes, default = _lang_codes()
     for key, value in patch.items():
         if key not in HOMEPAGE_DEFAULTS:
             continue
-        if key == "sections":
+        if key in LOCALIZED_KEYS:
+            cfg[key] = _normalize_localized(value, codes, default)
+        elif key == "sections":
             cfg[key] = normalize_sections(value)
         elif key in _BOOL_KEYS:
             cfg[key] = bool(value)
@@ -130,19 +176,50 @@ def set_homepage_config(patch, *, request=None):
     return cfg
 
 
-def resolve_sections(cfg=None):
-    """Ordered sections with their resolved copy, for template iteration."""
+def resolve_homepage(cfg=None, lang=None):
+    """Flatten localized fields to plain strings for the given language, for the
+    public landing template."""
+    cfg = cfg or get_homepage_config()
+    _codes, default = _lang_codes()
+    lang = lang or default
+    flat = dict(cfg)
+    for key in LOCALIZED_KEYS:
+        flat[key] = localize(cfg.get(key), lang, default)
+    return flat
+
+
+def resolve_sections(flat_cfg=None):
+    """Ordered sections with resolved (already-flattened) copy, for the landing.
+    Pass the output of ``resolve_homepage`` so kicker/heading are plain strings."""
     from common.i18n import t
 
-    cfg = cfg or get_homepage_config()
+    flat_cfg = flat_cfg if flat_cfg is not None else resolve_homepage()
     resolved = []
-    for section in cfg["sections"]:
+    for section in flat_cfg["sections"]:
         key = section["key"]
         resolved.append({
             "key": key,
             "label": t(f"hp_section_{key}", key.capitalize()),
             "enabled": bool(section.get("enabled")),
-            "kicker": cfg.get(f"{key}_kicker", ""),
-            "heading": cfg.get(f"{key}_heading", ""),
+            "kicker": flat_cfg.get(f"{key}_kicker", ""),
+            "heading": flat_cfg.get(f"{key}_heading", ""),
         })
     return resolved
+
+
+def builder_sections(cfg=None):
+    """Ordered sections with RAW per-language dicts, for the builder editor."""
+    from common.i18n import t
+
+    cfg = cfg or get_homepage_config()
+    out = []
+    for section in cfg["sections"]:
+        key = section["key"]
+        out.append({
+            "key": key,
+            "label": t(f"hp_section_{key}", key.capitalize()),
+            "enabled": bool(section.get("enabled")),
+            "kicker": cfg.get(f"{key}_kicker", {}),
+            "heading": cfg.get(f"{key}_heading", {}),
+        })
+    return out

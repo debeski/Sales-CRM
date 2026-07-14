@@ -42,7 +42,8 @@ if register_app_settings is not None:
         icon="bi-shop",
         order=60,
         fields=[
-            {"name": "storefront_enabled", "type": "boolean", "label": lazy_t("public_catalog_storefront_enabled", "Storefront live"), "default": True},
+            {"name": "homepage_enabled", "type": "boolean", "label": lazy_t("public_catalog_homepage_enabled", "Homepage live"), "default": True},
+            {"name": "shop_enabled", "type": "boolean", "label": lazy_t("public_catalog_shop_enabled", "Shop live"), "default": True},
             {"name": "featured_limit", "type": "number", "label": lazy_t("public_catalog_featured_limit", "Featured items on landing"), "default": PUBLIC_CATALOG_DEFAULTS["featured_limit"], "min_value": 0, "max_value": 24},
             {"name": "shop_title", "type": "char", "label": lazy_t("public_catalog_shop_title", "Shop title"), "default": PUBLIC_CATALOG_DEFAULTS["shop_title"]},
             {"name": "shop_subtitle", "type": "text", "label": lazy_t("public_catalog_shop_subtitle", "Shop subtitle"), "default": PUBLIC_CATALOG_DEFAULTS["shop_subtitle"]},
