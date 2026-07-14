@@ -8,7 +8,8 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.generic import DetailView, TemplateView
 
-from dlux.translations import get_current_language_code
+from dlux.translations import get_current_language_code, get_strings
+from dlux.utils import build_config_groups, get_system_config
 
 from .forms import PublicContactForm
 from .homepage import get_homepage_config, resolve_homepage, resolve_sections
@@ -16,6 +17,7 @@ from .models import PublicCatalogListing, PublicContactMessage
 from .settings import contact_links, get_public_catalog_config
 
 HOMEPAGE_PREVIEW_PERM = "public_catalog.view_publiccataloglisting"
+PUBLIC_PREVIEW_LANG_ATTR = "_public_preview_language"
 
 
 def _public_listings():
@@ -45,20 +47,60 @@ def _is_staff_preview(request):
     )
 
 
-def _apply_public_language(request):
-    """Honor the public header ``?lang=<code>`` toggle. An explicit click is an
-    explicit choice, so we set it as a forced language preview (the mechanism
-    DLux's own language picker uses) — this is honored regardless of the
-    ``allow_user_language_override`` setting."""
-    from dlux.utils import get_system_config
+def _public_language_catalog():
+    cfg = get_system_config()
+    languages = cfg.get("localization", {}).get("languages") or cfg.get("languages", {}) or {}
+    return cfg, languages
 
-    lang = request.GET.get("lang")
+
+def _requested_public_language(request):
+    raw = (request.GET.get("lang") or "").strip().lower().replace("_", "-")
+    if not raw:
+        return "", None, {}
+    cfg, languages = _public_language_catalog()
+    if raw in languages:
+        return raw, cfg, languages
+    base = raw.split("-", 1)[0]
+    if base in languages:
+        return base, cfg, languages
+    return "", cfg, languages
+
+
+def _apply_public_language(request):
+    """Honor public ``?lang=<code>`` without leaking builder-preview choices.
+
+    Normal public clicks persist in the session as before. Staff preview iframes
+    share the authenticated staff session, so their requested edit language stays
+    request-local and is applied by the landing context instead.
+    """
+    lang, _cfg, _languages = _requested_public_language(request)
     if not lang or not hasattr(request, "session"):
         return
-    langs = get_system_config().get("languages") or {}
-    if lang in langs:
-        request.session["lang"] = lang
-        request.session["dlux_force_language_preview"] = True
+    if _is_staff_preview(request):
+        setattr(request, PUBLIC_PREVIEW_LANG_ATTR, lang)
+        return
+    request.session["lang"] = lang
+    request.session["dlux_force_language_preview"] = True
+
+
+def _public_language_context(lang, cfg=None, languages=None):
+    cfg = cfg or get_system_config()
+    languages = languages or cfg.get("localization", {}).get("languages") or cfg.get("languages", {}) or {}
+    lang_config = languages.get(lang) if isinstance(languages, dict) else {}
+    if not isinstance(lang_config, dict):
+        lang_config = {"name": str(lang_config or lang).upper()}
+    current_dir = lang_config.get("dir") or ("rtl" if lang.startswith(("ar", "fa", "he", "ur")) else "ltr")
+    app_config = dict(cfg)
+    app_config.update(build_config_groups(app_config, lang))
+    overrides = cfg.get("localization", {}).get("translations", cfg.get("translations", None))
+    return {
+        "APP_CONFIG": app_config,
+        "CURRENT_LANG": lang,
+        "CURRENT_DIR": current_dir,
+        "LANGUAGES": languages,
+        "LANG_CONFIG": {**lang_config, "dir": current_dir},
+        "DLUX_STRINGS": get_strings(lang, overrides=overrides),
+    }
 
 
 class _StorefrontGateMixin:
@@ -99,10 +141,13 @@ class PublicLandingView(_StorefrontGateMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         cfg = get_public_catalog_config()
-        # The homepage renders in the visitor's active language. The builder's
-        # preview iframe switches the whole page (including the header) with ?lang=,
-        # so we resolve against that same active language — no separate override.
-        home = resolve_homepage(lang=get_current_language_code(self.request))
+        # The homepage renders in the visitor's active language. Staff preview
+        # iframes can request an edit language without mutating the staff session.
+        active_lang = (
+            getattr(self.request, PUBLIC_PREVIEW_LANG_ATTR, None)
+            or get_current_language_code(self.request)
+        )
+        home = resolve_homepage(lang=active_lang)
         limit = cfg.get("featured_limit") or 4
         listings = _public_listings()
         featured = [listing for listing in listings if listing.is_featured][:limit]
@@ -145,6 +190,7 @@ class PublicLandingView(_StorefrontGateMixin, TemplateView):
             "listing_counts": _listing_counts(listings),
             "contact_links": contact_links(),
         })
+        ctx.update(_public_language_context(active_lang))
         return ctx
 
 

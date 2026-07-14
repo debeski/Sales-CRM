@@ -3,7 +3,7 @@
 ## Part 1: Project Related
 
 ### Current Verified Snapshot:
-Django POS/ERP on django-lux 1.4.4 (host venv symlinked to mounted source `/Users/debeski/Desktop/depy/pkg-django-lux/dlux`). Apps: finance, catalog, sales, common, public_catalog. Public `/` + `/shop/...` + `/contact/modal/`; staff workflow under `/staff/...` (+ `/staff/shop-builder/` catalog builder & `/staff/shop-builder/homepage/` homepage builder); Caddy only proxies/legacy-redirects. VERSION/CHANGELOG at v0.6.1 (unreleased; v0.6.0 is tagged). Current baseline: 171 pass. `public_catalog` unreleased migration is squashed to `0001`.
+Django POS/ERP on django-lux 1.4.4 (host venv symlinked to mounted source `/Users/debeski/Desktop/depy/pkg-django-lux/dlux`). Apps: finance, catalog, sales, common, public_catalog. Public `/` + `/shop/...` + `/contact/modal/`; staff workflow under `/staff/...` (+ `/staff/shop-builder/` catalog builder & homepage builder); Caddy only proxies/legacy-redirects. VERSION/CHANGELOG now v0.6.2 because v0.6.1 is tagged. Current baseline: 172 pass. `public_catalog` unreleased migration is squashed to `0001`.
 
 ### Current Project Adopted Standards:
 - Scoped models via dlux ScopedModel; list pages via common.ScopedListView + dlux modal_manager.
@@ -34,6 +34,7 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [ ] Optional: inject per-list Add button into the filter bar (config "buttons") vs current separate top-right button.
   - [ ] Browser smoke-test modal edit/delete (row actions) — combobox verified via test client.
 - **Completed Recently:**
+  - [x] (v0.6.2) Fixed Homepage Builder preview language leak: staff `/?preview=1&lang=<code>` now uses request-local `_public_preview_language` context (`CURRENT_LANG`/dir/strings/APP_CONFIG/homepage content) instead of mutating `session['lang']`; builder edit toggle initializes from `get_current_language_code(request)` so user pref EN survives AR project default. Assets `?v=20260714l`.
   - [x] (v0.6.1) Homepage Builder Visual Studio: `switch_pos.public_homepage` normalized visual settings (`style_preset`, hero layout/height/focus, nav/card/density/background/motion, `accent_secondary`) + per-section `variant`; builder Style panel with icon controls/tablet preview; landing emits shell/hero/section hooks, visible preset directions, distinct spec/minimal cards, compact density, light sparse connected electrical grid, denser linework/wider diagonal bg variants, shop-disabled card link hiding, `?lang=` preview. Removed redundant homepage DLux Options tile; public catalog tile now only identity/contact/default disclosure settings. Assets `?v=20260714k`; browser smoke + 170 pass.
   - [x] (v0.5.1) Workspace reset removal: removed workspace dashboard Reset button/handler; DLux app prefs remain source of truth, and stale `localStorage` is cleared instead of rehydrating `switch_pos.workspace_dashboard.v1` after DLux Reset Defaults.
   - [x] (v0.5.1) Public Homepage Builder at `/staff/shop-builder/homepage/`: live-preview-iframe editor for the landing page (hero copy/CTA/background mode/overlay, reorderable+toggleable sections w/ per-section copy, Story block, accent colour). New `public_catalog/homepage.py` config in namespace `switch_pos.public_homepage`; `landing.html`/`PublicLandingView` fully config/section-driven (featured/categories/services/story/contact); accent → `--public-accent` var. `homepage_save` reuses `mutation_endpoint`+`sidebar_exclude`; staff `?preview=1` bypasses offline 503 gate. `homepage_builder.{html,css,js}`, EN/AR. +14 tests → 166 pass.
@@ -67,10 +68,10 @@ Audit done 2026-07-02: barcode already present; migrations clean; no scraping de
   - [x] (v0.1.3-v0.1.5) Caddy edge + portfolio split, composer-updater topology, dashboard rates, customer/deposit comboboxes, translated filters/choices/permissions, seed demo.
 
 ### One-line info about last verified Tests:
-2026-07-14: Public builder Options cleanup — `check`, `public_catalog` 32 pass, full suite 171 pass, `git diff --check`; homepage Options tile removed, catalog tile slimmed to identity/contact/default disclosure settings.
+2026-07-14: Homepage preview language isolation — `check`, focused regressions 3 pass, `public_catalog` 33 pass, full suite 172 pass, `git diff --check`.
 
 ### One-line info about last time edited Docs:
-CHANGELOG.md + docs/ARCHITECTURE.md — documented Homepage Builder Visual Studio config surface and v0.6.1 feature entry.
+CHANGELOG.md + docs/ARCHITECTURE.md — documented v0.6.2 request-local homepage preview language behavior.
 
 ## Part 2: Global
 

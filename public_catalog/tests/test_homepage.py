@@ -1,10 +1,12 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from catalog.models import Category, Product
+from dlux.models import SystemSettings
 from public_catalog.homepage import (
     HOMEPAGE_DEFAULTS, get_homepage_config, localize, normalize_sections,
     resolve_homepage, set_homepage_config,
@@ -110,6 +112,7 @@ class HomepageBuilderViewTests(TestCase):
     def tearDown(self):
         set_homepage_config(dict(HOMEPAGE_DEFAULTS))
         set_public_catalog_config({"homepage_enabled": True, "shop_enabled": True})
+        cache.delete("SystemSettings")
 
     def test_builder_page_renders(self):
         resp = self.client.get(reverse("public_catalog_staff:homepage_builder"))
@@ -208,6 +211,36 @@ class HomepageBuilderViewTests(TestCase):
         self.assertIn("Secure space", en)
         ar = anon.get(reverse("public_catalog:landing") + "?lang=ar").content.decode()
         self.assertIn("مساحة آمنة", ar)
+
+    def test_staff_preview_language_does_not_persist_to_display_session(self):
+        settings = SystemSettings.load()
+        settings.default_language = "ar"
+        settings.allow_user_language_override = True
+        settings.languages = {
+            "en": {"name": "English", "dir": "ltr"},
+            "ar": {"name": "العربية", "dir": "rtl"},
+        }
+        settings.save()
+        cache.delete("SystemSettings")
+        self.admin.profile.preferences = {"language": "en"}
+        self.admin.profile.save(update_fields=["preferences"])
+        set_homepage_config({"hero_title": {"en": "English hero", "ar": "عنوان عربي"}})
+
+        before = self.client.get(reverse("public_catalog_staff:homepage_builder")).content.decode()
+        self.assertIn('data-active-lang="en"', before)
+
+        preview = self.client.get(reverse("public_catalog:landing") + "?preview=1&lang=ar")
+        self.assertEqual(preview.status_code, 200)
+        html = preview.content.decode()
+        self.assertIn('lang="ar"', html)
+        self.assertIn('dir="rtl"', html)
+        self.assertIn("عنوان عربي", html)
+
+        session = self.client.session
+        self.assertIsNone(session.get("lang"))
+        self.assertIsNone(session.get("dlux_force_language_preview"))
+        after = self.client.get(reverse("public_catalog_staff:homepage_builder")).content.decode()
+        self.assertIn('data-active-lang="en"', after)
 
     def test_staff_preview_bypasses_offline_gate(self):
         set_public_catalog_config({"homepage_enabled": False})

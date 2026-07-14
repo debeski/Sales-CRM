@@ -255,6 +255,7 @@ class PublicHomepageBuilderView(LoginRequiredMixin, PermissionRequiredMixin, Tem
 
     def get_context_data(self, **kwargs):
         from common.i18n import t
+        from dlux.translations import get_current_language_code
         from .homepage import (
             builder_sections, get_homepage_config, get_public_languages,
         )
@@ -262,7 +263,7 @@ class PublicHomepageBuilderView(LoginRequiredMixin, PermissionRequiredMixin, Tem
         ctx = super().get_context_data(**kwargs)
         cfg = get_homepage_config()
         languages, default_lang = get_public_languages()
-        active = ctx.get("CURRENT_LANG") or self.request.session.get("lang") or default_lang
+        active = ctx.get("CURRENT_LANG") or get_current_language_code(self.request) or default_lang
         codes = [c for c, _l in languages]
         def choices(items):
             return [

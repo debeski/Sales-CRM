@@ -90,7 +90,11 @@ borders and light theme-aware opacity; `linework` uses stacked thin-angle CSS
 gradients to create a denser drawn-rule field without external assets.
 `PublicLandingView` and `landing.html` are fully driven by that config; the accents
 inject `--public-accent` and `--public-accent-2` CSS variables into `public_base.html`,
-and the rest emits class hooks consumed by `public_catalog.css`. Its `homepage_save`
+and the rest emits class hooks consumed by `public_catalog.css`. The builder preview
+uses `?preview=1&lang=<code>` with a request-local language override: it renders the
+iframe's homepage content, direction, strings, and language-aware `APP_CONFIG` in the
+edited language without writing to the staff user's display-language session; normal
+public header `?lang=` clicks still persist in the visitor session. Its `homepage_save`
 endpoint shares the same POST-only `mutation_endpoint` + `sidebar_exclude` treatment
 as the catalog builder. The Homepage Builder is the only UI surface for homepage
 copy, sections, visual style, and the homepage live toggle; its config still persists
