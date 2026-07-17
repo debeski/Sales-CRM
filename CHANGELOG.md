@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.6.3
+- **DjangoLux Runtime Requirement Bump**: Bumped `requirements.txt` from `django-lux[updater]>=1.4.6` to `django-lux[updater]>=1.4.8` so the release bakes and installs the DjangoLux runtime fixes required by v0.4.8. No application schema, UI, or business-logic changes.
+
 ## v0.6.2
 - **Homepage Builder Preview Language Isolation**: Changed `public_catalog.views._apply_public_language` so `/?preview=1&lang=<code>` staff preview iframe requests set a request-local `_public_preview_language` instead of writing `session['lang']` / `dlux_force_language_preview`; normal public header `?lang=` clicks still persist as before. `PublicLandingView` now resolves homepage content plus `CURRENT_LANG`, `CURRENT_DIR`, `DLUX_STRINGS`, `LANGUAGES`, and language-aware `APP_CONFIG` from that request-local preview language, while `PublicHomepageBuilderView` starts its edit-language toggle from `dlux.get_current_language_code(request)` so user display preferences win over the system default. Public/homepage-builder asset cache keys bumped to `?v=20260714l`; regression tests cover the English-user / Arabic-default session-bleed case.
 
