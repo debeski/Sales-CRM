@@ -16,6 +16,8 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+VERSION = (BASE_DIR / "VERSION").read_text(encoding="utf-8").strip()
+DLUX_APP_VERSION = VERSION
 BASE_URL = os.getenv("BASE_URL", "http://localhost")
 BASE_HOSTNAME = urlparse(BASE_URL).hostname
 ALLOWED_URLS = [

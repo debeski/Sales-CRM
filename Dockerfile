@@ -34,6 +34,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 ARG DLUX_BAKED_VERSION=""
 LABEL org.switchlibya.dlux_baked_version="${DLUX_BAKED_VERSION}"
 
+# Optional schema-1 project release metadata consumed by Composer and surfaced
+# in DjangoLux's application-image update review.
+ARG DLUX_PROJECT_RELEASE_MANIFEST=""
+LABEL org.dlux.project.release-manifest="${DLUX_PROJECT_RELEASE_MANIFEST}"
+
 # Copy the project files
 COPY . /app/
 

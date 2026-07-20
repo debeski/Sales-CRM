@@ -17,7 +17,7 @@ stack (db, redis, caddy, web, celery, smtp-relay, pgadmin, db-backup) and runs t
 
 ## Production deploy with a domain + automatic HTTPS
 
-The edge is a **Caddy** reverse proxy (`Caddyfile`, `caddy` service). Caddy
+The edge is a **Caddy** reverse proxy (`.proxy/Caddyfile`, `caddy` service). Caddy
 obtains and renews Let's Encrypt certificates automatically on boot — there is
 no certbot step, no bootstrap command, and no manual reload. A plain
 `./start.sh` is the entire TLS workflow.
@@ -54,7 +54,7 @@ public paths share the canonical domain.
    > is only a redirect to `/staff/`.
 
    No ACME email is required — Caddy issues and auto-renews certs without one. To
-   receive Let's Encrypt expiry notices, add a real address to the `Caddyfile`
+   receive Let's Encrypt expiry notices, add a real address to the `.proxy/Caddyfile`
    global block (`{ email you@your-domain.tld }`); the domain must contain a dot.
 3. Bring the stack up in production (no `-d`):
    ```bash
@@ -202,15 +202,20 @@ The full topology is a **3+1 network model**:
 The stack ships two services that let an operator (or dlux's in-app UI) roll the
 deployment onto a newer published image without any host shell access:
 
-- **`composer-updater`** (`debeski/composer:1.1.5`, `command: watch`) — a resident
+- **`composer-updater`** (`debeski/composer:latest`, deployed at v1.1.11 or newer,
+  `command: watch`) — a resident
   process that watches `/opt/dlux-runtime/state/image-update-request.json` on the
-  shared `dlux_runtime` volume. On a request it runs `composer -uo` against the
+  shared `dlux_runtime` volume. On a request it runs `composer -u` against the
   host daemon (pull → **version gate** → recreate → health → `post_start` migrator)
-  and writes `deploy-status.json`. It talks to the daemon over TCP via the socket
-  proxy (`DOCKER_HOST=tcp://docker-socket-proxy:2375`), never the raw socket. It is
-  pinned (not `:latest`) so it won't recreate itself mid-update, and mounts the
-  project at its host path (`${PWD}:${PWD}`) — **so the stack must be started from
-  its root directory** for the `./media`/`./logs` bind mounts to resolve.
+  and atomically writes terminal `deploy-status.json` and a token-matched request
+  acknowledgement even if the child Composer process exits unexpectedly. Runtime
+  Compose overrides are created in a writable system temporary directory, not the
+  host-owned project mount. It talks to the daemon over TCP via the socket proxy
+  (`DOCKER_HOST=tcp://docker-socket-proxy:2375`), never the raw socket. The service
+  uses `:latest`, but `COMPOSER_EXCLUDE_SERVICES` prevents it and its socket proxy
+  from recreating themselves mid-update. It mounts the project at its host path
+  (`${PWD}:${PWD}`) — **so the stack must be started from its root directory** for
+  the `./media`/`./logs` bind mounts to resolve.
 - **`docker-socket-proxy`** (tecnativa) — a least-privilege Docker API gateway that
   mounts `/var/run/docker.sock:ro` and exposes only the surface Compose needs
   (containers/images/networks/volumes/exec/POST/info/ping/version). Everything else
@@ -223,13 +228,29 @@ stamped as `LABEL org.switchlibya.dlux_baked_version`. The updater
 onto an image whose baked version is older than the deployment's active runtime
 version (`/opt/dlux-runtime/state/active.json`).
 
+**Project release metadata**: tagged CI validates root `release-manifest.json`
+against `VERSION` and stamps its compact schema-1 JSON into
+`LABEL org.dlux.project.release-manifest` on both the smoke-tested and published
+images. Composer reads that explicit label through
+`COMPOSER_RELEASE_MANIFEST_LABEL` and publishes the project version, summary,
+highlights, and HTTPS release URL to the DjangoLux application-image review.
+
+The pinned DjangoLux v1.4.9 image worker treats only a token-matched Composer
+acknowledgement or fresh terminal status as authoritative. A failed acknowledgement
+immediately terminalizes the image update and lowers maintenance; if neither a
+fresh phase nor acknowledgement appears within 120 seconds, the worker fails the
+handoff instead of leaving the site behind Caddy's 503 page for the full deployment
+timeout. The HTTPS maintenance page then probes same-origin `/` and reloads the
+operator's original path once Caddy can route to the recovered application.
+
 ## CI / Docker image
 
 Two workflows (tag-driven model — full details in [RELEASING.md](RELEASING.md)):
 
 - **`.github/workflows/ci.yml`** — on push/PR to `main`: Django checks + tests
   (`config.settings_dev_sqlite`) and a Docker build + runtime smoke test (no push).
-- **`.github/workflows/release.yml`** — on a `v*` tag: verifies `tag == VERSION`,
+- **`.github/workflows/release.yml`** — on a `v*` tag: verifies the tag, `VERSION`,
+  and project release manifest agree,
   smoke-tests, pushes multi-arch `debeski/sales:<ver>` + `:latest`, and creates a
   GitHub Release from the `CHANGELOG.md` section.
 

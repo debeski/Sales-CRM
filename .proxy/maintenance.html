@@ -40,9 +40,27 @@
     var fill = document.getElementById('fill'), phase = document.getElementById('phase'),
         cons = document.getElementById('console'), title = document.getElementById('title'),
         subtitle = document.getElementById('subtitle'), actions = document.getElementById('actions');
-    var sawProgress = false, done = false, started = Date.now();
+    var sawProgress = false, done = false, started = Date.now(), recoveryTimer = null;
 
     function setBar(p, cls) { fill.style.width = Math.max(0, Math.min(100, p)) + '%'; fill.className = 'fill' + (cls ? ' ' + cls : ''); }
+
+    function scheduleRecoveryProbe() {
+      if (recoveryTimer !== null) return;
+      function probeRecovery() {
+        fetch('/', { cache: 'no-store', credentials: 'same-origin' })
+          .then(function (response) {
+            if (response.ok) {
+              window.location.reload();
+              return;
+            }
+            recoveryTimer = window.setTimeout(probeRecovery, 2000);
+          })
+          .catch(function () {
+            recoveryTimer = window.setTimeout(probeRecovery, 2000);
+          });
+      }
+      recoveryTimer = window.setTimeout(probeRecovery, 1000);
+    }
 
     function poll() {
       if (done) return;
@@ -59,7 +77,8 @@
         if (st === 'failed') {
           done = true; title.textContent = 'Update failed';
           subtitle.textContent = (doc && doc.error) ? String(doc.error) : 'The update did not complete. The previous version has been kept.';
-          setBar(100, 'failed'); phase.textContent = 'Failed'; actions.hidden = false; return;
+          setBar(100, 'failed'); phase.textContent = 'Failed'; actions.hidden = false;
+          scheduleRecoveryProbe(); return;
         }
         // Honor 'ready' only after real progress this session (ignore a stale
         // 'ready' left over from a previous update) or after a safety timeout.

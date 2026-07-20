@@ -4,7 +4,7 @@ name: Release
 #   git tag -a v0.1.0 -m "v0.1.0" && git push origin v0.1.0
 #
 # Pipeline:
-#   build-push     -> verify tag == VERSION, smoke-test, then multi-arch
+#   build-push     -> verify tag == VERSION == release manifest, smoke-test, then multi-arch
 #                     (amd64+arm64) build & push debeski/sales:<ver> + :latest
 #   github-release -> create the GitHub Release from the matching CHANGELOG section
 #
@@ -28,15 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify tag matches VERSION
+      - name: Verify tag and project release manifest
+        id: project_manifest
         run: |
-          file_ver="$(tr -d '[:space:]' < VERSION)"
-          tag_ver="${GITHUB_REF_NAME#v}"
-          echo "VERSION file: '$file_ver'   tag: '$tag_ver'"
-          if [ "$file_ver" != "$tag_ver" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME != VERSION ($file_ver). Bump VERSION before tagging."
-            exit 1
-          fi
+          python3 tools/validate_project_release_manifest.py
 
       - uses: docker/setup-qemu-action@v3
 
@@ -61,6 +56,7 @@ jobs:
           load: true
           build-args: |
             DLUX_BAKED_VERSION=${{ steps.dlux.outputs.version }}
+            DLUX_PROJECT_RELEASE_MANIFEST=${{ steps.project_manifest.outputs.json }}
           tags: ${{ env.IMAGE }}:ci-test
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -82,6 +78,7 @@ jobs:
           push: true
           build-args: |
             DLUX_BAKED_VERSION=${{ steps.dlux.outputs.version }}
+            DLUX_PROJECT_RELEASE_MANIFEST=${{ steps.project_manifest.outputs.json }}
           tags: |
             ${{ env.IMAGE }}:${{ github.ref_name }}
             ${{ env.IMAGE }}:latest
