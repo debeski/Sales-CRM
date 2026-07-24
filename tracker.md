@@ -2,11 +2,11 @@
 
 ## Part 1: Project Related [Max 55 lines]
 ### Current Verified Snapshot: [Max 5 lines]
-- Django POS/ERP v0.6.4 after tagged v0.6.3; production pins `django-lux[updater]==1.4.9`; apps: finance, catalog, sales, common, public_catalog.
+- Django POS/ERP v0.6.5 (untagged) after tagged v0.6.4; production pins `django-lux[updater]==1.5.3`; apps: finance, catalog, sales, common, public_catalog.
 - Public `/`/`/shop/...`/`/contact/modal/`; staff under `/staff/...`; Caddy terminates automatic TLS for apex/www and redirects legacy ERP host.
-- `VERSION`/`DLUX_APP_VERSION` and schema-1 `release-manifest.json` are version-locked; tagged images stamp `org.dlux.project.release-manifest` for Dlux update notes.
-- Composer 1.1.11/Dlux 1.4.9 recovery uses terminal ack, self-exclusion, hardened socket access, and same-origin maintenance return; Caddy TLS/routing is unchanged.
-- Current verified baseline: 175 tests pass; checks/migrations/Compose/workflow/manifest clean.
+- `DLUX_APP_VERSION` now comes from `get_project_version(BASE_DIR)` (manifest); root `VERSION` stays the release-gate input and is version-locked to schema-1 `release-manifest.json`.
+- Migration to the Composer agent needs Composer >= 1.2.2; 1.2.1's `enable-agent` emitted undeclared `dlux_update_egress`/`sales_docker_proxy` refs against this pre-1.5 scaffold.
+- Current verified baseline: 175 tests pass; checks/Compose config clean with `DLUX_APP_VERSION == 0.6.5`.
 ### Current Project Adopted Standards: [Max 5 lines]
 - Scoped models via `dlux.ScopedModel`; lists use `common.ScopedListView` + Dlux modal manager.
 - Money is frozen per invoice (`exchange_rate`, `unit_price_lyd`); finance is dependency root.
@@ -27,8 +27,8 @@
 - Local reused SQLite has obsolete `sales_invoice.attachment`; fresh migrated databases are correct.
 ### Incomplete Tasks: [Max 20 lines]
 - **Priority 1:**
-  - [ ] Publish Composer 1.1.11 and Dlux 1.4.9, publish Switch v0.6.4, recreate `composer-updater`, then submit a fresh update token.
-  - [ ] Confirm the published v0.6.4 image exposes both baked-version and project-manifest labels in Dlux image review.
+  - [ ] Publish Composer 1.2.2, `./start.sh --update`, re-run `./start.sh enable-agent` dry run, then `--apply` to migrate `composer-updater` -> `composer-agent`.
+  - [ ] Publish Switch v0.6.5 and confirm the image exposes both baked-version (1.5.3) and project-manifest labels in Dlux image review.
   - [ ] Reconcile the live VM Caddy/Compose deployment with current apex/www/ERP routing.
   - [ ] Publish initial listings and configure contact SMTP credentials.
   - [ ] Browser smoke-test modal edit/delete and the complete image-update recovery flow.
@@ -36,16 +36,17 @@
   - [ ] Design reservation/purchase/checkout models with idempotency constraints before adding public POST endpoints.
   - [ ] Optional: move per-list Add actions into filter bars instead of separate top-right buttons.
 - **Completed Recently:**
+  - [x] v0.6.5 sources `DLUX_APP_VERSION` from `get_project_version(BASE_DIR)` and aligns dev `DLUX_BAKED_VERSION` with the 1.5.3 pin.
   - [x] v0.6.4 adopted schema-1 project image release metadata with fail-closed CI validation and both-image label stamping.
   - [x] v0.6.4 added terminal image-update recovery, exact Dlux 1.4.9 gate, Composer hardening, and Caddy maintenance return.
   - [x] v0.6.2 isolated homepage preview language from the user session.
   - [x] v0.6.1 delivered Homepage Builder visual controls and public presentation variants.
   - [x] v0.5.1 delivered the live-preview Homepage Builder and removed workspace reset rehydration.
 ### One-line info about last verified Tests: [Max 5 lines]
-- 2026-07-18: 175/175 tests, Django check, no missing migrations, manifest success/bad-tag failure, workflow YAML, base+dev Compose, py_compile, and diff checks pass.
+- 2026-07-24: 175/175 tests and `manage.py check` pass after the manifest-version switch; `docker compose config` accepts the patched `enable-agent` output for this project.
 - 2026-07-18: Production Compose still renders apex/www automatic TLS, ERP redirect host, and `https://switchlibya.ly`; Caddy files unchanged.
 ### One-line info about last time edited Docs: [Max 2 lines]
-- 2026-07-18: README, RELEASING, OPERATIONS, and CHANGELOG document project manifest governance and Dlux image-review metadata.
+- 2026-07-24: RELEASING documents manifest-sourced `DLUX_APP_VERSION` vs the `VERSION` release-gate input; CHANGELOG v0.6.5 updated.
 
 ## Part 2: Global [Max 20 lines]
 ### Global Standard Helpers, Shortcuts, Info, etc.:

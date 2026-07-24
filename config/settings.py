@@ -8,7 +8,7 @@ from pathlib import Path
 import logging
 from urllib.parse import urlparse
 from csp.constants import SELF, UNSAFE_EVAL, UNSAFE_INLINE
-from dlux.utils import get_secret
+from dlux.utils import get_secret, get_project_version
 from dlux.utils import dlux_settings  # noqa: separate line so dlux_setup's literal substring check sees it and stops re-appending its block
 
 
@@ -16,8 +16,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-VERSION = (BASE_DIR / "VERSION").read_text(encoding="utf-8").strip()
-DLUX_APP_VERSION = VERSION
+DLUX_APP_VERSION = get_project_version(BASE_DIR)
 BASE_URL = os.getenv("BASE_URL", "http://localhost")
 BASE_HOSTNAME = urlparse(BASE_URL).hostname
 ALLOWED_URLS = [

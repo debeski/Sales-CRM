@@ -1,0 +1,130 @@
+# ---------------------------------------------------------------------------
+# Caddy reverse proxy for the Switch Django/DLux stack.
+#
+# Public and staff paths are split inside Django/DLux, not by Caddy:
+#
+#   CADDY_SITE_ADDRESS  → Django app (e.g. "switchlibya.ly www.switchlibya.ly")
+#   CADDY_ERP_ADDRESS   → optional legacy host redirected to /staff/
+#
+# Automatic HTTPS: when an address is a real hostname (prod), Caddy obtains AND
+# renews a Let's Encrypt cert for it on its own — no certbot, no bootstrap. Each
+# hostname gets its own cert. HTTP->HTTPS redirect is added automatically.
+#
+# Local dev (compose.dev.yml): CADDY_SITE_ADDRESS=:80 makes the app the catch-all
+# on plain HTTP.
+#
+# CADDY_MAX_SIZE = max request body (Caddy units, e.g. 10MB).
+#
+# No ACME email is set: Caddy renews well before expiry, so expiry notices are
+# optional. To receive Let's Encrypt expiry emails, add a global block at the top
+# with a REAL address (must contain a dot): { email you@your-domain.tld }
+# ---------------------------------------------------------------------------
+
+# Full Django app routing, defined once and imported by the site block below.
+(erp_app) {
+	encode zstd gzip
+
+	request_body {
+		max_size {$CADDY_MAX_SIZE:10MB}
+	}
+
+	# Ordered routing (route preserves top-to-bottom order, unlike bare directives).
+	route {
+		# Never serve dlux DB backups over media.
+		respond /media/dlux_backups/* 404
+
+		# Static assets — immutable, cached one year. handle_path strips /static.
+		handle_path /static/* {
+			root * /app/staticfiles
+			header Cache-Control "public, max-age=31536000, immutable"
+			file_server
+		}
+
+		# Media files.
+		handle_path /media/* {
+			root * /app/media
+			file_server
+		}
+
+		# pgAdmin under /pgadmin4/ (served even during app maintenance, like nginx).
+		handle_path /pgadmin4/* {
+			reverse_proxy pgadmin:80 {
+				header_up X-Script-Name /pgadmin4
+			}
+		}
+
+		# Live update status/log for the maintenance progress page. Served even
+		# during maintenance (composer-updater writes these on the shared
+		# dlux_runtime volume, which stays up while web is recreated).
+		handle /_update/status.json {
+			root * /opt/dlux-runtime/state
+			rewrite * /deploy-status.json
+			header Cache-Control "no-store"
+			file_server
+		}
+		handle /_update/log.txt {
+			root * /opt/dlux-runtime/state
+			rewrite * /deploy-log.txt
+			header Cache-Control "no-store"
+			file_server
+		}
+
+		# Always-200 edge-liveness probe for a front proxy's health check. Never
+		# proxied to web, never gated by the maintenance flag.
+		handle /_edge-alive {
+			respond "ok" 200
+		}
+
+		# Hybrid health endpoint:
+		# - normal operation: proxy to Django's /health/
+		# - planned maintenance: proxy-local 200 so a front proxy keeps backend UP
+		handle /health* {
+			@maintenance_health file {
+				root /
+				try_files /opt/dlux-runtime/state/maintenance
+			}
+			respond @maintenance_health "ok" 200
+
+			rewrite * /health/
+			reverse_proxy web:8000
+		}
+
+		# Maintenance flag: dlux writes /opt/dlux-runtime/state/maintenance.
+		# Short-circuit the app route to 503 (static/media/pgadmin + /_update/* +
+		# /_edge-alive + /health above are already served). handle_errors renders
+		# the maintenance progress page.
+		@maintenance file {
+			root /
+			try_files /opt/dlux-runtime/state/maintenance
+		}
+		error @maintenance 503
+
+		# Primary application.
+		reverse_proxy web:8000
+	}
+
+	# Maintenance / upstream-down page (mirrors nginx error_page 502 503 504 =503).
+	handle_errors {
+		@down expression {http.error.status_code} in [502, 503, 504]
+		handle @down {
+			root * /usr/share/caddy/maintenance
+			rewrite * /maintenance.html
+			file_server {
+				status 503
+			}
+		}
+	}
+}
+
+# ── Canonical Django/DLux application (apex + www) ─────────────────────────
+{$CADDY_SITE_ADDRESS:localhost} {
+	import erp_app
+}
+
+# ── Legacy ERP hostname ─────────────────────────────────────────────────────
+# Keep old bookmarks working without making Caddy responsible for app routing.
+{$CADDY_ERP_ADDRESS:http://erp.localhost} {
+	@already_staff path /staff /staff/*
+	redir @already_staff {$CADDY_PRIMARY_URL:http://localhost}{uri} permanent
+	redir {$CADDY_PRIMARY_URL:http://localhost}/staff{uri} permanent
+}

@@ -7,6 +7,7 @@ import json
 import re
 from pathlib import Path
 
+from django.conf import settings as django_settings
 from django.test import SimpleTestCase
 
 from tools.validate_project_release_manifest import (
@@ -99,7 +100,8 @@ class ProjectScaffoldTests(SimpleTestCase):
             'COMPOSER_RELEASE_MANIFEST_LABEL: "org.dlux.project.release-manifest"',
             compose,
         )
-        self.assertIn("DLUX_APP_VERSION = VERSION", settings)
+        self.assertIn("DLUX_APP_VERSION = get_project_version(BASE_DIR)", settings)
+        self.assertEqual(django_settings.DLUX_APP_VERSION, project_version)
         with self.assertRaisesRegex(ProjectReleaseManifestError, "version mismatch"):
             validate_project_release_manifest(
                 project_root,

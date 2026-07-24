@@ -5,6 +5,11 @@ pushing a `v*` git tag runs `.github/workflows/release.yml`, which builds the
 multi-arch image, pushes it to Docker Hub, and creates a GitHub Release. The
 root `VERSION` and `release-manifest.json.version` are version-locked release
 sources; the manifest also supplies the project summary, highlights, and release URL shown by DjangoLux.
+At runtime the app reads its own version from the manifest —
+`config/settings.py` sets `DLUX_APP_VERSION = get_project_version(BASE_DIR)`
+(django-lux 1.5.3) — while `VERSION` remains the input to the release gate, CI,
+and the image smoke test. Keeping them equal is enforced by
+`tools/validate_project_release_manifest.py` and `tests/test_scaffold.py`.
 
 ## One-time setup
 
